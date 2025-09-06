@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.database.user import User
 from app.models.schemas.auth import UserCreate, UserCreateResponse, UserResponse
-from app.utils.security import hash_password, hash_identifier
+from app.utils.security import hash_password, hash_identifier, verify_password
 from web3 import Web3
 
 
@@ -50,3 +50,10 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
     except Exception as e:
         db.rollback()
         raise e
+
+
+async def authenticate_user(email: str, password: str, db: Session) -> User | None:
+    user = db.query(User).filter(User.email == email).first()
+    if user and verify_password(password, user.password_hash):
+        return user
+    return None

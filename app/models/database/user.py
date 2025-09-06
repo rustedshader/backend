@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, Enum
 from app.models.database.base import Base
 from enum import Enum as PyEnum
+import datetime
 
 
 class UserRoleEnum(str, PyEnum):
@@ -28,3 +29,16 @@ class User(Base):
     is_email_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     role = Column(Enum(UserRoleEnum), default=UserRoleEnum.USER)
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    token = Column(String, unique=True, index=True)
+    is_revoked = Column(Boolean, default=False)
+    created_at = Column(
+        Integer, default=lambda: int(datetime.datetime.utcnow().timestamp())
+    )
+    expires_at = Column(Integer)

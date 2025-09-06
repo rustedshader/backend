@@ -17,6 +17,9 @@ class Settings(BaseSettings):
 
     database_url: str = f"postgresql://{postgres_user}:{postgres_password}@{postgres_host}:{postgres_port}/{postgres_db}"
 
+    jwt_secret_key: str = os.environ.get("JWT_SECRET_KEY", "your_secret_key")
+    jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
