@@ -40,3 +40,14 @@ class UserCreateResponse(BaseModel):
     is_success: bool
     blockchain_private_key: str
     blockchain_address: str
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    email: str | None = None
+    role: str | None = None

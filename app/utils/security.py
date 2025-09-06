@@ -1,5 +1,6 @@
 import bcrypt
 from jose import jwt, JWTError
+from datetime import datetime, timedelta
 from app.core.config import settings
 from app.models.database.user import RefreshToken
 from sqlalchemy.orm import Session
@@ -35,7 +36,10 @@ def create_access_token(data: dict, expires_delta: int | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        to_encode.update({"exp": expires_delta})
+        expire = datetime.utcnow() + timedelta(seconds=expires_delta)
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
@@ -46,7 +50,10 @@ def create_refresh_token(data: dict, expires_delta: int | None = None) -> str:
     """Create a JWT refresh token."""
     to_encode = data.copy()
     if expires_delta:
-        to_encode.update({"exp": expires_delta})
+        expire = datetime.utcnow() + timedelta(seconds=expires_delta)
+    else:
+        expire = datetime.utcnow() + timedelta(days=7)
+    to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
@@ -64,8 +71,13 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-async def store_refresh_token(db: Session, user_id: int, token: str, expires_at: int):
+async def store_refresh_token(
+    db: Session, user_id: int, token: str, expires_delta: int
+):
     try:
+        expires_at = int(
+            (datetime.utcnow() + timedelta(seconds=expires_delta)).timestamp()
+        )
         refresh_token = RefreshToken(
             user_id=user_id,
             token=token,
