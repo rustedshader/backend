@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 from app.models.database.user import User
 from app.models.schemas.auth import UserCreate, UserCreateResponse, UserResponse
 from app.utils.security import hash_password, hash_identifier, verify_password
@@ -53,7 +53,8 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
 
 
 async def authenticate_user(email: str, password: str, db: Session) -> User | None:
-    user = db.query(User).filter(User.email == email).first()
+    statement = select(User).where(User.email == email)
+    user = db.exec(statement).first()
     if user and verify_password(password, user.password_hash):
         return user
     return None

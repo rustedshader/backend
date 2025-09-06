@@ -3,7 +3,7 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from app.core.config import settings
 from app.models.database.user import RefreshToken
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
 
 def hash_password(plain_password: str) -> str:

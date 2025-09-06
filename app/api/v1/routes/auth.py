@@ -1,5 +1,6 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlmodel import Session
 from app.models.schemas.auth import UserCreate, UserCreateResponse, Token
 from app.models.database.base import get_db
 from app.models.database.user import User
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/sign-up", response_model=UserCreateResponse)
-async def sign_up(user_create_data: UserCreate, db=Depends(get_db)):
+async def sign_up(user_create_data: UserCreate, db: Session = Depends(get_db)):
     if user_create_data.indian_citizenship and not user_create_data.aadhar_number:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -52,7 +53,7 @@ async def sign_up(user_create_data: UserCreate, db=Depends(get_db)):
 @router.post("/login", response_model=Token)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db=Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     user = await authenticate_user(form_data.username, form_data.password, db)
     if not user:

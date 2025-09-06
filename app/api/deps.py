@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 from app.core.config import settings
 from app.models.database.base import get_db
 from app.models.database.user import User
@@ -32,7 +32,8 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
+    statement = select(User).where(User.email == email)
+    user = db.exec(statement).first()
     if user is None:
         raise credentials_exception
 
@@ -64,6 +65,19 @@ async def get_current_admin_user(
     Dependency to get the current user if they are an admin.
     """
     if current_user.role not in ["admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
+        )
+    return current_user
+
+
+async def get_current_super_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Dependency to get the current user if they are a super admin.
+    """
+    if current_user.role != "super_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
         )
