@@ -3,6 +3,7 @@ from app.api.deps import get_current_admin_user, get_current_user
 from app.models.schemas.treks import TrekCreate
 from app.models.database.base import get_db
 from app.models.database.user import User
+from app.models.database.treks import Trek
 from sqlmodel import Session
 from app.services.treks import create_trecks, get_trek_by_id
 
@@ -10,7 +11,7 @@ router = APIRouter(prefix="/trek", tags=["trek"])
 
 
 # This would be trek metadata like name, location, etc.
-@router.post("/add-trek")
+@router.post("/add-trek", response_model=Trek)
 async def add_treck(
     admin_user: User = Depends(get_current_admin_user),
     trek_create_data: TrekCreate = None,
@@ -21,8 +22,13 @@ async def add_treck(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Trek data is required"
         )
     try:
-        await create_trecks(admin_user.id, trek_create_data, db)
+        treck = await create_trecks(
+            created_by_id=admin_user.id, treck_create_data=trek_create_data, db=db
+        )
+
+        return treck
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create trek",
@@ -83,4 +89,10 @@ async def get_trekker_location_history(trek_id: int, trekker_id: int):
 # Here trecking device will post live location data to our api
 @router.post("/{trek_id}/trekking-device/{device_id}/post-location")
 async def post_trekking_device_location(trek_id: int, device_id: int):
+    pass
+
+
+# Update trek details like name, location, duration, difficulty level, etc.
+@router.put("/{trek_id}/update")
+async def update_trek_details(trek_id: int):
     pass

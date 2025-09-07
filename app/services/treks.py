@@ -7,7 +7,7 @@ async def create_trecks(
     created_by_id: int, treck_create_data: TrekCreate, db: Session
 ) -> Trek:
     try:
-        new_trek = Trek.model_validate(treck_create_data)
+        new_trek = Trek(**treck_create_data.model_dump())
         new_trek.created_by_id = created_by_id
         db.add(new_trek)
         db.commit()
