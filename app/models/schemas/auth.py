@@ -30,6 +30,8 @@ class UserResponse(BaseModel):
     is_active: bool
     role: UserRoleEnum
     blockchain_address: str | None = None
+    tourist_id_token: int | None = None
+    tourist_id_transaction_hash: str | None = None
 
     class Config:
         from_attributes = True
@@ -40,6 +42,8 @@ class UserCreateResponse(BaseModel):
     is_success: bool
     blockchain_private_key: str
     blockchain_address: str
+    tourist_id_token: int | None = None
+    tourist_id_transaction_hash: str | None = None
 
 
 class Token(BaseModel):

@@ -6,6 +6,12 @@ from web3.types import TxReceipt
 from eth_account import Account
 from hexbytes import HexBytes
 from app.core.config import settings
+import warnings
+import logging
+
+# Suppress ABI mismatch warnings from eth_utils
+warnings.filterwarnings("ignore", message=".*MismatchedABI.*")
+logging.getLogger("eth_utils.functional").setLevel(logging.ERROR)
 
 
 # --- Minimal ABI for your TouristID contract ---
@@ -564,14 +570,52 @@ class TouristIDClient:
 
         receipt = self._sign_send_wait(tx)
 
-        # Parse tokenId from IDIssued event
+        # Parse tokenId from events with multiple fallback strategies
         token_id = -1
+
+        # Strategy 1: Try to get IDIssued event
         try:
-            events = self.contract.events.IDIssued().process_receipt(receipt)
-            if events:
-                token_id = int(events[0]["args"]["tokenId"])
-        except Exception:
-            pass
+            for log in receipt.logs:
+                try:
+                    decoded_log = self.contract.events.IDIssued().process_log(log)
+                    token_id = int(decoded_log["args"]["tokenId"])
+                    break
+                except Exception:
+                    continue
+        except Exception as e:
+            print(f"Warning: Could not parse IDIssued event: {e}")
+
+        # Strategy 2: If IDIssued failed, try Transfer event (ERC721 minting creates a Transfer from 0x0)
+        if token_id == -1:
+            try:
+                for log in receipt.logs:
+                    try:
+                        decoded_log = self.contract.events.Transfer().process_log(log)
+                        # Check if this is a mint (from address 0x0) to our tourist
+                        if (
+                            decoded_log["args"]["from"]
+                            == "0x0000000000000000000000000000000000000000"
+                            and decoded_log["args"]["to"].lower() == tourist.lower()
+                        ):
+                            token_id = int(decoded_log["args"]["tokenId"])
+                            print(f"Got token ID {token_id} from Transfer event")
+                            break
+                    except Exception:
+                        continue
+            except Exception as e:
+                print(f"Warning: Could not parse Transfer event: {e}")
+
+        # Strategy 3: Final fallback - check balance (less reliable but better than nothing)
+        if token_id == -1:
+            try:
+                balance = self.contract.functions.balanceOf(tourist).call()
+                if balance > 0:
+                    print(
+                        f"Fallback: Tourist now has {balance} tokens after transaction"
+                    )
+                    # This doesn't give us the exact token ID, but we know the transaction succeeded
+            except Exception:
+                pass
 
         return token_id, receipt
 

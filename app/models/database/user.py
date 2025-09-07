@@ -26,6 +26,8 @@ class User(SQLModel, table=True):
     aadhar_number_hash: Optional[str] = Field(default=None)
     passport_number_hash: Optional[str] = Field(default=None)
     blockchain_address: Optional[str] = Field(default=None)
+    tourist_id_token: Optional[int] = Field(default=None)
+    tourist_id_transaction_hash: Optional[str] = Field(default=None)
     is_kyc_verified: bool = Field(default=False)
     is_email_verified: bool = Field(default=False)
     is_active: bool = Field(default=True)
