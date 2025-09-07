@@ -18,25 +18,14 @@ class Trips(SQLModel, table=True):
     __tablename__ = "trips"
     id: int = Field(default=None, primary_key=True, index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
-    guide_id: int = Field(foreign_key="guides.id", index=True)
     trek_id: int = Field(foreign_key="treks.id", index=True)
+    guide_id: Optional[int] = Field(foreign_key="guides.id", index=True)
+    tracking_deivce_id: Optional[int] = Field(
+        foreign_key="tracking_devices.id", index=True
+    )
     start_date: datetime.date = Field(index=True)
     end_date: datetime.date = Field(index=True)
     status: TripStatusEnum = Field(default=TripStatusEnum.ASSIGNED, index=True)
-    safety_score: Optional[float] = Field(default=None, index=True)
-    is_tracking_active: bool = Field(default=True, index=True)
-
-
-class TripItinerary(SQLModel, table=True):
-    __tablename__ = "trip_itineraries"
-    id: int = Field(default=None, primary_key=True, index=True)
-    trip_id: int = Field(foreign_key="trips.id", index=True)
-    trek_id: int = Field(foreign_key="treks.id", index=True)
-    day_number: int = Field(index=True)
-    activities: Optional[str] = Field(default=None)
-    accommodation_details: Optional[str] = Field(default=None)
-    meals_included: Optional[str] = Field(default=None)
-    notes: Optional[str] = Field(default=None)
 
 
 class LocationHistory(SQLModel, table=True):

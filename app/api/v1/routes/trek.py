@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import get_current_admin_user, get_current_user
-from app.models.schemas.treks import TrekCreate
+from app.models.schemas.treks import TrekCreate, TrekUpdate
 from app.models.database.base import get_db
 from app.models.database.user import User
 from app.models.database.treks import Trek
 from sqlmodel import Session
-from app.services.treks import create_trecks, get_trek_by_id
+from app.services.treks import create_trecks, get_trek_by_id, update_trek
 
 router = APIRouter(prefix="/trek", tags=["trek"])
 
@@ -35,7 +35,49 @@ async def add_treck(
         ) from e
 
 
-# This data would be list of cordinates format
+# Update trek details like name, location, duration, difficulty level, etc.
+@router.put("/{trek_id}/update", response_model=Trek)
+async def update_trek_details(
+    trek_id: int,
+    trek_update_data: TrekUpdate,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        # Check if trek exists
+        existing_trek = await get_trek_by_id(trek_id, db)
+        if not existing_trek:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
+            )
+
+        # Check if the admin user is the one who created the trek
+        if existing_trek.created_by_id != admin_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update treks that you created",
+            )
+
+        # Update the trek
+        updated_trek = await update_trek(trek_id, trek_update_data, db)
+        if not updated_trek:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update trek",
+            )
+
+        return updated_trek
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update trek details",
+        ) from e
+
+
+# This data would be list of cordinates format (Later)
 @router.post("/add-trek-data")
 async def add_treck_data(admin_user=Depends(get_current_admin_user)):
     pass
@@ -62,7 +104,7 @@ async def get_trek_information(
         ) from e
 
 
-# This would return the geojson data for the trek route
+# This would return the geojson data for the trek route (Later)
 @router.get("/{trek_id}/route")
 async def get_trek_route(trek_id: int):
     pass
@@ -71,28 +113,4 @@ async def get_trek_route(trek_id: int):
 # This would return live location of all the trekkers on this trek
 @router.get("/{trek_id}/live-locations")
 async def get_trek_live_locations(trek_id: int):
-    pass
-
-
-# This would return status of the trek like not started, in progress, completed, cancelled, etc.
-@router.get("/{trek_id}/status")
-async def get_trek_status(trek_id: int):
-    pass
-
-
-# This would return historical location data of a specific trekker on this trek
-@router.get("/{trek_id}/trekker/{trekker_id}/location-history")
-async def get_trekker_location_history(trek_id: int, trekker_id: int):
-    pass
-
-
-# Here trecking device will post live location data to our api
-@router.post("/{trek_id}/trekking-device/{device_id}/post-location")
-async def post_trekking_device_location(trek_id: int, device_id: int):
-    pass
-
-
-# Update trek details like name, location, duration, difficulty level, etc.
-@router.put("/{trek_id}/update")
-async def update_trek_details(trek_id: int):
     pass
