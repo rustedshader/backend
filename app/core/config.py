@@ -12,7 +12,16 @@ class Settings(BaseSettings):
     postgres_db: str = os.environ.get("POSTGRES_DB", "testdb")
     postgres_host: str = os.environ.get("POSTGRES_HOST", "localhost")
     postgres_port: int = int(os.environ.get("POSTGRES_PORT", 5432))
-
+    contract_address: str = os.environ.get("CONTRACT_ADDRESS", "")
+    owner_address: str = os.environ.get("OWNER_ADDRESS", "")
+    private_key: str = os.environ.get("PRIVATE_KEY", "")
+    blockchain_rpc_url: str = os.environ.get(
+        "BLOCKCHAIN_RPC_URL", "https://rpc-amoy.polygon.technology"
+    )
+    blockchain_chain_id: int = int(os.environ.get("BLOCKCHAIN_CHAIN_ID", 80002))
+    blockchain_currency_symbol: str = os.environ.get(
+        "BLOCKCHAIN_CURRENCY_SYMBOL", "POL"
+    )
     api_v1_prefix: str = "/api/v1"
 
     database_url: str = f"postgresql://{postgres_user}:{postgres_password}@{postgres_host}:{postgres_port}/{postgres_db}"
