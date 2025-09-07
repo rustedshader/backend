@@ -16,6 +16,7 @@ from app.services.treks import (
     update_trek,
     update_trek_route_data,
     get_geojson_route_data,
+    delete_trek,
 )
 
 router = APIRouter(prefix="/trek", tags=["trek"])
@@ -88,6 +89,27 @@ async def update_trek_details(
         ) from e
 
 
+# This would return basic trek information like name, location, duration, difficulty level, etc.
+@router.get("/{trek_id}/information")
+async def get_trek_information(
+    trek_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        trek = await get_trek_by_id(trek_id, db)
+        if not trek:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
+            )
+        return trek
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch trek information",
+        ) from e
+
+
 # This data would be list of cordinates format (Later)
 @router.post("/add-trek-data", response_model=TrekDataResponse)
 async def add_treck_data(
@@ -117,24 +139,48 @@ async def add_treck_data(
         ) from e
 
 
-# This would return basic trek information like name, location, duration, difficulty level, etc.
-@router.get("/{trek_id}/information")
-async def get_trek_information(
-    trek_id: int,
-    current_user: User = Depends(get_current_user),
+# Edit/Update trek route data coordinates
+@router.put("/edit-trek-data", response_model=TrekDataResponse)
+async def edit_trek_route_data(
+    trek_data: TrekDataUpdate,
+    admin_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     try:
-        trek = await get_trek_by_id(trek_id, db)
-        if not trek:
+        # Check if trek exists
+        existing_trek = await get_trek_by_id(trek_data.trek_id, db)
+        if not existing_trek:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
             )
-        return trek
+
+        # Check if the admin user is the one who created the trek
+        if existing_trek.created_by_id != admin_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only edit trek data for treks that you created",
+            )
+
+        # Update the trek route data
+        updated_trek_route_data = await update_trek_route_data(trek_data, db)
+        if not updated_trek_route_data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update trek route data",
+            )
+
+        return TrekDataResponse(
+            trek_id=updated_trek_route_data.trek_id,
+            created_at=updated_trek_route_data.created_at,
+            updated_at=updated_trek_route_data.updated_at,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch trek information",
+            detail="Failed to edit trek route data",
         ) from e
 
 
@@ -153,4 +199,45 @@ async def get_trek_route(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch trek route data",
+        ) from e
+
+
+# Delete a trek (admin only, creator only)
+@router.delete("/{trek_id}")
+async def delete_trek_endpoint(
+    trek_id: int,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        # Check if trek exists
+        existing_trek = await get_trek_by_id(trek_id, db)
+        if not existing_trek:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
+            )
+
+        # Check if the admin user is the one who created the trek
+        if existing_trek.created_by_id != admin_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete treks that you created",
+            )
+
+        # Delete the trek
+        success = await delete_trek(trek_id, db)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete trek",
+            )
+
+        return {"message": "Trek deleted successfully", "trek_id": trek_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete trek",
         ) from e

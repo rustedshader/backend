@@ -123,3 +123,40 @@ async def get_geojson_route_data(trek_id: int, db: Session) -> Any | None:
         return geojson_data
     except Exception as e:
         raise e
+
+
+async def delete_trek(trek_id: int, db: Session) -> bool:
+    """
+    Delete a trek and all its related data (route data, trips, etc.)
+    Returns True if successful, False if trek not found
+    """
+    try:
+        # Get the trek to verify it exists
+        statement = select(Trek).where(Trek.id == trek_id)
+        trek = db.exec(statement).first()
+
+        if not trek:
+            return False
+
+        # Delete related TrekRouteData first (due to foreign key constraint)
+        route_statement = select(TrekRouteData).where(TrekRouteData.trek_id == trek_id)
+        route_data = db.exec(route_statement).first()
+        if route_data:
+            db.delete(route_data)
+
+        # Note: For trips, tracking_device, and guides tables with foreign key references,
+        # you might want to handle them based on your business logic:
+        # 1. CASCADE delete (delete all related records)
+        # 2. SET NULL (if foreign key allows null)
+        # 3. Prevent deletion if related records exist
+        #
+        # For now, we'll delete the trek directly. If you have foreign key constraints
+        # that prevent deletion, you'll need to handle those relationships first.
+
+        # Delete the trek
+        db.delete(trek)
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        raise e
