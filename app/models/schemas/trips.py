@@ -16,3 +16,9 @@ class TripUpdate(BaseModel):
     start_date: Optional[datetime.date]
     end_date: Optional[datetime.date]
     status: Optional[str]
+
+
+class LocationUpdate(BaseModel):
+    trip_id: int
+    latitude: float
+    longitude: float

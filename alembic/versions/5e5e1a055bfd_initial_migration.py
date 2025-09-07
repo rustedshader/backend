@@ -1,8 +1,8 @@
 """initial migration
 
-Revision ID: cc27e1ae7172
+Revision ID: 5e5e1a055bfd
 Revises:
-Create Date: 2025-09-07 17:42:02.002552
+Create Date: 2025-09-07 23:49:57.954109
 
 """
 
@@ -15,7 +15,7 @@ import geoalchemy2
 
 
 # revision identifiers, used by Alembic.
-revision: str = "cc27e1ae7172"
+revision: str = "5e5e1a055bfd"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -242,6 +242,70 @@ def upgrade() -> None:
         op.f("ix_guide_treks_trek_id"), "guide_treks", ["trek_id"], unique=False
     )
     op.create_table(
+        "tracking_devices",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("device_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("api_key", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("treck_id", sa.Integer(), nullable=True),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "ACTIVE", "INACTIVE", "MAINTENANCE", name="trackingdevicestatusenum"
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "last_known_location", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("battery_level", sa.Float(), nullable=True),
+        sa.Column("signal_strength", sa.Float(), nullable=True),
+        sa.Column("activated_at", sa.Integer(), nullable=True),
+        sa.Column("deactivated_at", sa.Integer(), nullable=True),
+        sa.Column("created_at", sa.Integer(), nullable=False),
+        sa.Column("updated_at", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["treck_id"],
+            ["treks.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_api_key"),
+        "tracking_devices",
+        ["api_key"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_created_at"),
+        "tracking_devices",
+        ["created_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_device_id"),
+        "tracking_devices",
+        ["device_id"],
+        unique=True,
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_id"), "tracking_devices", ["id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_status"), "tracking_devices", ["status"], unique=False
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_treck_id"),
+        "tracking_devices",
+        ["treck_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_tracking_devices_updated_at"),
+        "tracking_devices",
+        ["updated_at"],
+        unique=False,
+    )
+    op.create_table(
         "trek_route_data",
         sa.Column("trek_id", sa.Integer(), nullable=False),
         sa.Column(
@@ -263,7 +327,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("trek_id"),
     )
-    # Create GIST index for route geometry with IF NOT EXISTS logic
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_trek_route_data_route ON trek_route_data USING gist (route)"
     )
@@ -286,8 +349,9 @@ def upgrade() -> None:
         "trips",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("guide_id", sa.Integer(), nullable=False),
         sa.Column("trek_id", sa.Integer(), nullable=False),
+        sa.Column("guide_id", sa.Integer(), nullable=True),
+        sa.Column("tracking_deivce_id", sa.Integer(), nullable=True),
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=False),
         sa.Column(
@@ -301,11 +365,13 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column("safety_score", sa.Float(), nullable=True),
-        sa.Column("is_tracking_active", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(
             ["guide_id"],
             ["guides.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tracking_deivce_id"],
+            ["tracking_devices.id"],
         ),
         sa.ForeignKeyConstraint(
             ["trek_id"],
@@ -320,17 +386,14 @@ def upgrade() -> None:
     op.create_index(op.f("ix_trips_end_date"), "trips", ["end_date"], unique=False)
     op.create_index(op.f("ix_trips_guide_id"), "trips", ["guide_id"], unique=False)
     op.create_index(op.f("ix_trips_id"), "trips", ["id"], unique=False)
-    op.create_index(
-        op.f("ix_trips_is_tracking_active"),
-        "trips",
-        ["is_tracking_active"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_trips_safety_score"), "trips", ["safety_score"], unique=False
-    )
     op.create_index(op.f("ix_trips_start_date"), "trips", ["start_date"], unique=False)
     op.create_index(op.f("ix_trips_status"), "trips", ["status"], unique=False)
+    op.create_index(
+        op.f("ix_trips_tracking_deivce_id"),
+        "trips",
+        ["tracking_deivce_id"],
+        unique=False,
+    )
     op.create_index(op.f("ix_trips_trek_id"), "trips", ["trek_id"], unique=False)
     op.create_index(op.f("ix_trips_user_id"), "trips", ["user_id"], unique=False)
     op.create_table(
@@ -366,10 +429,10 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    # Create GIST index for alert location with IF NOT EXISTS logic
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_alerts_location ON alerts USING gist (location)"
     )
+
     op.create_index(
         op.f("ix_alerts_alert_type"), "alerts", ["alert_type"], unique=False
     )
@@ -399,7 +462,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    # Create GIST index for location history with IF NOT EXISTS logic
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_location_history_location ON location_history USING gist (location)"
     )
@@ -418,60 +480,31 @@ def upgrade() -> None:
         ["trip_id"],
         unique=False,
     )
-    op.create_table(
-        "trip_itineraries",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("trip_id", sa.Integer(), nullable=False),
-        sa.Column("trek_id", sa.Integer(), nullable=False),
-        sa.Column("day_number", sa.Integer(), nullable=False),
-        sa.Column("activities", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.Column(
-            "accommodation_details", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column("meals_included", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.Column("notes", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["trek_id"],
-            ["treks.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["trip_id"],
-            ["trips.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_trip_itineraries_day_number"),
-        "trip_itineraries",
-        ["day_number"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_trip_itineraries_id"), "trip_itineraries", ["id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_trip_itineraries_trek_id"),
-        "trip_itineraries",
-        ["trek_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_trip_itineraries_trip_id"),
-        "trip_itineraries",
-        ["trip_id"],
-        unique=False,
-    )
+    # op.drop_table("spatial_ref_sys")
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_index(op.f("ix_trip_itineraries_trip_id"), table_name="trip_itineraries")
-    op.drop_index(op.f("ix_trip_itineraries_trek_id"), table_name="trip_itineraries")
-    op.drop_index(op.f("ix_trip_itineraries_id"), table_name="trip_itineraries")
-    op.drop_index(op.f("ix_trip_itineraries_day_number"), table_name="trip_itineraries")
-    op.drop_table("trip_itineraries")
+    op.create_table(
+        "spatial_ref_sys",
+        sa.Column("srid", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column(
+            "auth_name", sa.VARCHAR(length=256), autoincrement=False, nullable=True
+        ),
+        sa.Column("auth_srid", sa.INTEGER(), autoincrement=False, nullable=True),
+        sa.Column(
+            "srtext", sa.VARCHAR(length=2048), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "proj4text", sa.VARCHAR(length=2048), autoincrement=False, nullable=True
+        ),
+        sa.CheckConstraint(
+            "srid > 0 AND srid <= 998999", name=op.f("spatial_ref_sys_srid_check")
+        ),
+        sa.PrimaryKeyConstraint("srid", name=op.f("spatial_ref_sys_pkey")),
+    )
     op.drop_index(op.f("ix_location_history_trip_id"), table_name="location_history")
     op.drop_index(op.f("ix_location_history_timestamp"), table_name="location_history")
     op.drop_index(op.f("ix_location_history_id"), table_name="location_history")
@@ -490,10 +523,9 @@ def downgrade() -> None:
     op.drop_table("alerts")
     op.drop_index(op.f("ix_trips_user_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_trek_id"), table_name="trips")
+    op.drop_index(op.f("ix_trips_tracking_deivce_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_status"), table_name="trips")
     op.drop_index(op.f("ix_trips_start_date"), table_name="trips")
-    op.drop_index(op.f("ix_trips_safety_score"), table_name="trips")
-    op.drop_index(op.f("ix_trips_is_tracking_active"), table_name="trips")
     op.drop_index(op.f("ix_trips_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_guide_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_end_date"), table_name="trips")
@@ -507,6 +539,14 @@ def downgrade() -> None:
         postgresql_using="gist",
     )
     op.drop_table("trek_route_data")
+    op.drop_index(op.f("ix_tracking_devices_updated_at"), table_name="tracking_devices")
+    op.drop_index(op.f("ix_tracking_devices_treck_id"), table_name="tracking_devices")
+    op.drop_index(op.f("ix_tracking_devices_status"), table_name="tracking_devices")
+    op.drop_index(op.f("ix_tracking_devices_id"), table_name="tracking_devices")
+    op.drop_index(op.f("ix_tracking_devices_device_id"), table_name="tracking_devices")
+    op.drop_index(op.f("ix_tracking_devices_created_at"), table_name="tracking_devices")
+    op.drop_index(op.f("ix_tracking_devices_api_key"), table_name="tracking_devices")
+    op.drop_table("tracking_devices")
     op.drop_index(op.f("ix_guide_treks_trek_id"), table_name="guide_treks")
     op.drop_index(op.f("ix_guide_treks_is_active"), table_name="guide_treks")
     op.drop_index(op.f("ix_guide_treks_id"), table_name="guide_treks")

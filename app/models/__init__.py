@@ -4,7 +4,6 @@ from app.models.database.treks import Trek, DifficultyLevelEnum, TrekRouteData
 from app.models.database.trips import (
     Trips,
     TripStatusEnum,
-    TripItinerary,
     AlertTypeEnum,
     AlertStatusEnum,
     Alerts,
@@ -27,7 +26,6 @@ __all__ = [
     "TrekRouteData",
     "Trips",
     "TripStatusEnum",
-    "TripItinerary",
     "AlertTypeEnum",
     "AlertStatusEnum",
     "Alerts",

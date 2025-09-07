@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from app.models.database.treks import DifficultyLevelEnum
-from typing import Optional
+from typing import Optional, List, Tuple
 
 
 class TrekCreate(BaseModel):
@@ -47,3 +47,17 @@ class TrekUpdate(BaseModel):
     maximum_people: Optional[int] = None
     cost_per_person: Optional[float] = None
     difficulty_level: Optional[DifficultyLevelEnum] = None
+
+
+class TrekDataUpdate(BaseModel):
+    trek_id: int
+    route_data: List[
+        Tuple[float, float]
+    ]  # List of (latitude, longitude) points representing the route
+
+
+class TrekDataResponse(BaseModel):
+    trek_id: int
+    created_at: int
+    updated_at: int
+    message: str = "Trek route data updated successfully"

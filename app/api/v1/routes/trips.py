@@ -1,6 +1,10 @@
 # Here api routes for user trips
 from fastapi import APIRouter, Depends, status, HTTPException
-from app.api.deps import get_current_admin_user, get_current_user
+from app.api.deps import (
+    get_current_admin_user,
+    get_current_user,
+    authenticate_tracking_device,
+)
 from app.models.database.base import get_db
 from app.models.schemas.trips import TripCreate
 from app.models.database.user import User
@@ -8,6 +12,7 @@ from sqlmodel import Session
 from app.services.trips import create_new_trip, get_user_trips, get_trip_by_id
 from typing import Sequence
 from app.models.database.trips import Trips
+from app.models.schemas.trips import LocationUpdate
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -71,4 +76,15 @@ async def update_trip_by_id(trip_id: int):
 # Link tracking device to a trip
 @router.post("/{trip_id}/link-device")
 async def link_device_to_trip(trip_id: int):
+    pass
+
+
+# Here tracking device will send live location data to the server and will respond if user is safe area or not deviated or not etc
+# X-API-Key: your-device-api-key
+@router.post("/{trip_id}/live-data")
+async def receive_live_data(
+    location_data: LocationUpdate,
+    tracking_device=Depends(authenticate_tracking_device),
+    db: Session = Depends(get_db),
+):
     pass

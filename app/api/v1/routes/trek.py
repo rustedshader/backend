@@ -1,11 +1,22 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import get_current_admin_user, get_current_user
-from app.models.schemas.treks import TrekCreate, TrekUpdate
+from app.models.schemas.treks import (
+    TrekCreate,
+    TrekUpdate,
+    TrekDataUpdate,
+    TrekDataResponse,
+)
 from app.models.database.base import get_db
 from app.models.database.user import User
 from app.models.database.treks import Trek
 from sqlmodel import Session
-from app.services.treks import create_trecks, get_trek_by_id, update_trek
+from app.services.treks import (
+    create_trecks,
+    get_trek_by_id,
+    update_trek,
+    update_trek_route_data,
+    get_geojson_route_data,
+)
 
 router = APIRouter(prefix="/trek", tags=["trek"])
 
@@ -78,9 +89,32 @@ async def update_trek_details(
 
 
 # This data would be list of cordinates format (Later)
-@router.post("/add-trek-data")
-async def add_treck_data(admin_user=Depends(get_current_admin_user)):
-    pass
+@router.post("/add-trek-data", response_model=TrekDataResponse)
+async def add_treck_data(
+    treck_data: TrekDataUpdate,
+    admin_user=Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        trek_route_data = await update_trek_route_data(treck_data, db)
+        if not trek_route_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
+            )
+
+        return TrekDataResponse(
+            trek_id=trek_route_data.trek_id,
+            created_at=trek_route_data.created_at,
+            updated_at=trek_route_data.updated_at,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add trek data",
+        ) from e
 
 
 # This would return basic trek information like name, location, duration, difficulty level, etc.
@@ -106,11 +140,17 @@ async def get_trek_information(
 
 # This would return the geojson data for the trek route (Later)
 @router.get("/{trek_id}/route")
-async def get_trek_route(trek_id: int):
-    pass
-
-
-# This would return live location of all the trekkers on this trek
-@router.get("/{trek_id}/live-locations")
-async def get_trek_live_locations(trek_id: int):
-    pass
+async def get_trek_route(
+    trek_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        geojson_data = await get_geojson_route_data(trek_id, db)
+        return geojson_data
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch trek route data",
+        ) from e

@@ -7,7 +7,6 @@ from alembic import context
 from app.models.database.treks import DifficultyLevelEnum, Trek, TrekRouteData
 from app.models.database.trips import (
     Trips,
-    TripItinerary,
     TripStatusEnum,
     LocationHistory,
     Alerts,
@@ -20,6 +19,8 @@ from app.models.database.guides import (
     GuideSpecialtyEnum,
     GuideTrek,
 )
+from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
+from app.models.database.user import User, UserRoleEnum, RefreshToken
 from app.core.config import settings
 from app.models.database.base import SQLModel
 
