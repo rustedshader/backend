@@ -58,6 +58,19 @@ async def get_current_active_user(
     return current_user
 
 
+async def get_current_guide_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Dependency to get the current user if they are a guide.
+    """
+    if current_user.role != "guide":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
+        )
+    return current_user
+
+
 async def get_current_admin_user(
     current_user: User = Depends(get_current_user),
 ) -> User:

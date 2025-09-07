@@ -4,9 +4,24 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from app.models.database.base import Base, metadata
-from app.models.database.user import User, RefreshToken
+from app.models.database.treks import DifficultyLevelEnum, Trek, TrekRouteData
+from app.models.database.trips import (
+    Trips,
+    TripItinerary,
+    TripStatusEnum,
+    LocationHistory,
+    Alerts,
+    AlertStatusEnum,
+    AlertTypeEnum,
+)
+from app.models.database.guides import (
+    Guides,
+    GuideCertificationLevelEnum,
+    GuideSpecialtyEnum,
+    GuideTrek,
+)
 from app.core.config import settings
+from app.models.database.base import SQLModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,7 +36,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = metadata
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
