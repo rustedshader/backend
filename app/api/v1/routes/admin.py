@@ -198,3 +198,71 @@ async def reject_itinerary_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reject itinerary",
         )
+
+
+class BlockchainReissueRequest(BaseModel):
+    user_id: int
+    reason: str  # Reason for reissuance (expired, lost, etc.)
+
+
+@router.post("/reissue-blockchain-id", response_model=BlockchainIDResponse)
+async def reissue_blockchain_id(
+    request: BlockchainReissueRequest,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Reissue blockchain ID for a tourist (admin only).
+    Used for renewal, replacement of lost/expired IDs, etc.
+    """
+    try:
+        # Get user
+        from sqlmodel import select
+
+        user_statement = select(User).where(User.id == request.user_id)
+        user = db.exec(user_statement).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
+        # Get user's latest approved itinerary for blockchain data
+        from app.models.database.itinerary import Itinerary, ItineraryStatusEnum
+
+        itinerary_statement = (
+            select(Itinerary)
+            .where(
+                Itinerary.user_id == request.user_id,
+                Itinerary.status == ItineraryStatusEnum.APPROVED,
+            )
+            .order_by(Itinerary.approved_at.desc())
+            .limit(1)
+        )
+
+        itinerary = db.exec(itinerary_statement).first()
+
+        if not itinerary:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No approved itinerary found for this user",
+            )
+
+        # Reissue blockchain ID using the same function as initial issuance
+        blockchain_data = await issue_blockchain_id_at_entry_point(
+            user_id=request.user_id,
+            itinerary_id=itinerary.id,
+            entry_point=f"REISSUE_BY_ADMIN_{admin_user.id}",
+            reason=f"REISSUE: {request.reason}",
+            db=db,
+        )
+
+        return BlockchainIDResponse(**blockchain_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reissue blockchain ID",
+        )

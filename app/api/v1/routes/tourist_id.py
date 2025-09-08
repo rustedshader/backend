@@ -58,33 +58,8 @@ async def get_tourist_id_status(
     )
 
 
-@router.post("/reissue")
-async def reissue_tourist_id(
-    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
-):
-    """Reissue a tourist ID for the current user."""
-    service = TouristIDService()
-
-    try:
-        result = service.reissue_tourist_id(current_user, db)
-        if not result:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to reissue tourist ID",
-            )
-
-        token_id, transaction_hash = result
-        return {
-            "message": "Tourist ID reissued successfully",
-            "tourist_id_token": token_id,
-            "transaction_hash": transaction_hash,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error reissuing tourist ID: {str(e)}",
-        )
+# Note: Tourist ID issuance/reissuance is now handled exclusively by admins
+# via the admin endpoints at entry points for security compliance
 
 
 @router.post("/revoke")
