@@ -4,6 +4,7 @@ import datetime
 
 
 class TripCreate(BaseModel):
+    itinerary_id: int
     treck_id: int
     guide_id: Optional[int]
     start_date: datetime.date
