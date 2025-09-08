@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from app.core.config import settings
 from app.models.database.user import RefreshToken
 from sqlmodel import Session
+import secrets
+import string
 
 
 def hash_password(plain_password: str) -> str:
@@ -90,3 +92,9 @@ async def store_refresh_token(
     except Exception as e:
         db.rollback()
         raise e
+
+
+def generate_api_key(length: int = 32) -> str:
+    """Generate a secure random API key."""
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))

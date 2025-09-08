@@ -15,6 +15,7 @@ from app.models.database.guides import (
     GuideSpecialtyEnum,
     GuideTrek,
 )
+from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
 
 
 __all__ = [
@@ -34,4 +35,6 @@ __all__ = [
     "GuideCertificationLevelEnum",
     "GuideSpecialtyEnum",
     "GuideTrek",
+    "TrackingDevice",
+    "TrackingDeviceStatusEnum",
 ]

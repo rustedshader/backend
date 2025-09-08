@@ -9,7 +9,7 @@ from app.api.v1.routes.tourist_id import router as tourist_id_router
 from app.models.database.base import create_db_and_tables
 
 # Import all models to ensure they are registered with SQLModel.metadata
-from app.models import User, RefreshToken, Trek  # noqa: F401
+from app.models import User, RefreshToken, Trek, TrackingDevice  # noqa: F401
 
 
 @asynccontextmanager
