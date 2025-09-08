@@ -19,6 +19,34 @@ class TripUpdate(BaseModel):
 
 
 class LocationUpdate(BaseModel):
-    trip_id: int
     latitude: float
     longitude: float
+
+
+class LinkDeviceRequest(BaseModel):
+    device_id: str
+
+
+class TripResponse(BaseModel):
+    id: int
+    user_id: int
+    trek_id: int
+    guide_id: Optional[int]
+    tracking_deivce_id: Optional[int]
+    start_date: datetime.date
+    end_date: datetime.date
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class LocationHistoryResponse(BaseModel):
+    id: int
+    trip_id: int
+    timestamp: int
+    latitude: float
+    longitude: float
+
+    class Config:
+        from_attributes = True

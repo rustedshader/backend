@@ -30,6 +30,42 @@ async def get_trek_by_id(trek_id: int, db: Session) -> Trek | None:
     return trek
 
 
+async def get_all_treks(db: Session) -> list[Trek]:
+    """Get all treks from the database."""
+    statement = select(Trek)
+    treks = db.exec(statement).all()
+    return list(treks)
+
+
+async def get_treks_by_difficulty(difficulty: str, db: Session) -> list[Trek]:
+    """Get treks filtered by difficulty level."""
+    statement = select(Trek).where(Trek.difficulty_level == difficulty)
+    treks = db.exec(statement).all()
+    return list(treks)
+
+
+async def get_treks_by_state(state: str, db: Session) -> list[Trek]:
+    """Get treks filtered by state."""
+    statement = select(Trek).where(Trek.state.ilike(f"%{state}%"))
+    treks = db.exec(statement).all()
+    return list(treks)
+
+
+async def get_treks_by_duration(
+    min_duration: int = None, max_duration: int = None, db: Session = None
+) -> list[Trek]:
+    """Get treks filtered by duration range."""
+    statement = select(Trek)
+
+    if min_duration is not None:
+        statement = statement.where(Trek.duration >= min_duration)
+    if max_duration is not None:
+        statement = statement.where(Trek.duration <= max_duration)
+
+    treks = db.exec(statement).all()
+    return list(treks)
+
+
 async def update_trek(
     trek_id: int, trek_update_data: TrekUpdate, db: Session
 ) -> Trek | None:

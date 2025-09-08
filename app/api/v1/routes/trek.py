@@ -13,6 +13,10 @@ from sqlmodel import Session
 from app.services.treks import (
     create_trecks,
     get_trek_by_id,
+    get_all_treks,
+    get_treks_by_difficulty,
+    get_treks_by_state,
+    get_treks_by_duration,
     update_trek,
     update_trek_route_data,
     get_geojson_route_data,
@@ -20,6 +24,82 @@ from app.services.treks import (
 )
 
 router = APIRouter(prefix="/trek", tags=["trek"])
+
+
+# Get all treks
+@router.get("/list", response_model=list[Trek])
+async def get_all_treks_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all available treks."""
+    try:
+        treks = await get_all_treks(db)
+        return treks
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch treks",
+        ) from e
+
+
+# Get treks by difficulty level
+@router.get("/difficulty/{difficulty}", response_model=list[Trek])
+async def get_treks_by_difficulty_endpoint(
+    difficulty: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get treks filtered by difficulty level (easy, medium, hard)."""
+    try:
+        treks = await get_treks_by_difficulty(difficulty, db)
+        return treks
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch treks by difficulty",
+        ) from e
+
+
+# Get treks by state
+@router.get("/state/{state}", response_model=list[Trek])
+async def get_treks_by_state_endpoint(
+    state: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get treks filtered by state."""
+    try:
+        treks = await get_treks_by_state(state, db)
+        return treks
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch treks by state",
+        ) from e
+
+
+# Get treks by duration range
+@router.get("/duration", response_model=list[Trek])
+async def get_treks_by_duration_endpoint(
+    min_duration: int = None,
+    max_duration: int = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get treks filtered by duration range (in hours)."""
+    try:
+        treks = await get_treks_by_duration(min_duration, max_duration, db)
+        return treks
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch treks by duration",
+        ) from e
 
 
 # This would be trek metadata like name, location, etc.
