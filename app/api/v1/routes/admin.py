@@ -12,12 +12,7 @@ from app.services.auth import (
     issue_blockchain_id_at_entry_point,
     get_user_profile_for_verification,
 )
-from app.services.itinerary import (
-    approve_itinerary_and_create_trips,
-    reject_itinerary,
-)
 from pydantic import BaseModel
-from typing import List
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -117,86 +112,33 @@ async def get_pending_verifications(
         )
 
 
-class ItineraryApprovalResponse(BaseModel):
-    message: str
-    itinerary_id: int
-    trips_created: List[dict]
-
-
-class ItineraryRejectionRequest(BaseModel):
-    reason: str
-
-
-@router.post(
-    "/itinerary/{itinerary_id}/approve", response_model=ItineraryApprovalResponse
-)
-async def approve_itinerary(
-    itinerary_id: int,
+@router.delete("/user/{user_id}")
+async def delete_user(
+    user_id: int,
     admin_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """
-    Approve an itinerary and automatically create trips based on itinerary days.
-    This creates individual trips for each location group in the itinerary.
+    Delete a user (admin only).
+    Use with caution - this is irreversible.
     """
     try:
-        trips = await approve_itinerary_and_create_trips(
-            itinerary_id, db, admin_user.id
-        )
+        from app.services.auth import delete_user as delete_user_service
 
-        trips_data = []
-        for trip in trips:
-            trips_data.append(
-                {
-                    "id": trip.id,
-                    "start_date": trip.start_date.isoformat(),
-                    "end_date": trip.end_date.isoformat(),
-                    "trek_id": trip.trek_id,
-                    "status": trip.status.value,
-                }
+        success = await delete_user_service(user_id, db)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
-        return ItineraryApprovalResponse(
-            message=f"Itinerary approved successfully. {len(trips)} trips created.",
-            itinerary_id=itinerary_id,
-            trips_created=trips_data,
-        )
+        return {"message": f"User {user_id} deleted successfully"}
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to approve itinerary",
-        )
-
-
-@router.post("/itinerary/{itinerary_id}/reject")
-async def reject_itinerary_endpoint(
-    itinerary_id: int,
-    request: ItineraryRejectionRequest,
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Reject an itinerary and provide feedback to the tourist.
-    """
-    try:
-        itinerary = await reject_itinerary(itinerary_id, db, request.reason)
-
-        return {
-            "message": "Itinerary rejected successfully",
-            "itinerary_id": itinerary_id,
-            "reason": request.reason,
-            "status": itinerary.status.value,
-        }
-
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reject itinerary",
+            detail="Failed to delete user",
         )
 
 

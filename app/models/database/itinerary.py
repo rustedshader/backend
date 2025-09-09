@@ -1,7 +1,18 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field
 from enum import Enum as PyEnum
-from typing import Optional, List
+from typing import Optional
 import datetime
+
+
+class ItineraryTypeEnum(str, PyEnum):
+    TREK = "trek"
+    CITY_TOUR = "city_tour"
+    MIXED = "mixed"  # Can include both places and trekking
+
+
+class DayTypeEnum(str, PyEnum):
+    TREK_DAY = "trek_day"  # Whole day dedicated to trekking
+    PLACE_VISIT_DAY = "place_visit_day"  # Whole day visiting tourist places/attractions
 
 
 class ItineraryStatusEnum(str, PyEnum):
@@ -38,9 +49,24 @@ class Itinerary(SQLModel, table=True):
 
     id: int = Field(default=None, primary_key=True, index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
-    trek_id: int = Field(foreign_key="treks.id", index=True)  # Link to predefined trek
+
+    # Itinerary can be either trek-based, place-based, or mixed
+    itinerary_type: ItineraryTypeEnum = Field(index=True)
+    trek_id: Optional[int] = Field(
+        foreign_key="treks.id", index=True, default=None
+    )  # For trek-based itineraries
+    primary_place_id: Optional[int] = Field(
+        foreign_key="places.id", index=True, default=None
+    )  # For place-based itineraries
+
     title: str = Field(index=True)
     description: Optional[str] = Field(default=None)
+
+    # Destination details
+    destination_city: str = Field(index=True)
+    destination_state: str = Field(index=True)
+    destination_country: str = Field(default="India", index=True)
+
     start_date: datetime.date = Field(index=True)
     end_date: datetime.date = Field(index=True)
     total_duration_days: int = Field(index=True)
@@ -49,7 +75,7 @@ class Itinerary(SQLModel, table=True):
     purpose_of_visit: str = Field(
         default="tourism"
     )  # tourism, business, pilgrimage, etc.
-    status: ItineraryStatusEnum = Field(default=ItineraryStatusEnum.DRAFT, index=True)
+    status: ItineraryStatusEnum = Field(default=ItineraryStatusEnum.ACTIVE, index=True)
 
     # Emergency contacts
     emergency_contact_name: str
@@ -67,8 +93,7 @@ class Itinerary(SQLModel, table=True):
     updated_at: int = Field(
         default_factory=lambda: int(datetime.datetime.utcnow().timestamp()), index=True
     )
-    submitted_at: Optional[int] = Field(default=None)
-    approved_at: Optional[int] = Field(default=None)
+    approved_at: Optional[int] = Field(default=None)  # Auto-approved now
 
 
 class ItineraryDay(SQLModel, table=True):
@@ -79,35 +104,33 @@ class ItineraryDay(SQLModel, table=True):
     day_number: int = Field(index=True)
     date: datetime.date = Field(index=True)
 
-    # Daily planning for the trek
-    planned_activities: str  # What they plan to do on this day of the trek
+    # Day type - either trek or place visit for the whole day
+    day_type: DayTypeEnum = Field(index=True)
+
+    # For TREK_DAY: reference to trek being done that day
+    trek_id: Optional[int] = Field(foreign_key="treks.id", index=True, default=None)
+
+    # For PLACE_VISIT_DAY: reference to primary place to visit
+    primary_place_id: Optional[int] = Field(
+        foreign_key="places.id", index=True, default=None
+    )
+
+    # General day planning
+    planned_activities: str  # What they plan to do on this day
     estimated_time_start: Optional[str] = Field(default=None)  # HH:MM format
     estimated_time_end: Optional[str] = Field(default=None)  # HH:MM format
 
-    # Accommodation planning (where they'll stay during the trek)
+    # Accommodation planning with coordinates (where they'll stay that night)
     accommodation_name: Optional[str] = Field(default=None)
     accommodation_type: Optional[AccommodationTypeEnum] = Field(default=None)
     accommodation_address: Optional[str] = Field(default=None)
     accommodation_contact: Optional[str] = Field(default=None)
+    accommodation_latitude: Optional[float] = Field(default=None)
+    accommodation_longitude: Optional[float] = Field(default=None)
 
-    # Transportation planning (how they'll get around during trek)
+    # Transportation to/from the day's activities
     transport_mode: Optional[TransportModeEnum] = Field(default=None)
-    transport_details: Optional[str] = Field(
-        default=None
-    )  # flight number, train number, etc.
-    estimated_time_end: Optional[str] = Field(default=None)  # HH:MM format
-
-    # Accommodation
-    accommodation_name: Optional[str] = Field(default=None)
-    accommodation_type: Optional[AccommodationTypeEnum] = Field(default=None)
-    accommodation_address: Optional[str] = Field(default=None)
-    accommodation_contact: Optional[str] = Field(default=None)
-
-    # Transportation
-    transport_mode: Optional[TransportModeEnum] = Field(default=None)
-    transport_details: Optional[str] = Field(
-        default=None
-    )  # flight number, train number, etc.
+    transport_details: Optional[str] = Field(default=None)
 
     # Safety and notes
     risk_level: str = Field(default="low")  # low, medium, high

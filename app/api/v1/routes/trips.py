@@ -1,13 +1,11 @@
 # Here api routes for user trips
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import (
-    get_current_admin_user,
     get_current_user,
     authenticate_tracking_device,
 )
 from app.models.database.base import get_db
 from app.models.schemas.trips import (
-    TripCreate,
     LocationUpdate,
     LinkDeviceRequest,
     TripResponse,
@@ -16,7 +14,6 @@ from app.models.schemas.trips import (
 from app.models.database.user import User
 from sqlmodel import Session
 from app.services.trips import (
-    create_new_trip,
     get_user_trips,
     get_trip_by_id,
     link_tracking_device_to_trip,
@@ -31,29 +28,13 @@ from app.models.database.trips import Trips
 router = APIRouter(prefix="/trips", tags=["trips"])
 
 
-# User can create a trip
-@router.post("/create-trip")
-async def create_trip(
-    trip_data: TripCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    try:
-        trip = await create_new_trip(trip_data, db)
-        return trip
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create trip",
-        ) from e
-
-
 # User can get all trips
 @router.get("/all-trips", response_model=Sequence[Trips])
-async def get_all_trips(current_user: User = Depends(get_current_user)):
+async def get_all_trips(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     try:
-        trips = await get_user_trips(current_user.id)
+        trips = await get_user_trips(current_user.id, db)
         return trips
     except Exception as e:
         print(e)

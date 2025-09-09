@@ -28,6 +28,7 @@ from app.models.database.itinerary import (
     AccommodationTypeEnum,
     TransportModeEnum,
 )
+from app.models.database.places import Place, PlaceTypeEnum
 from app.core.config import settings
 from app.models.database.base import SQLModel
 

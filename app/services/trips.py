@@ -1,24 +1,10 @@
-from app.models.schemas.trips import TripCreate, TripUpdate, LocationUpdate
 from sqlmodel import Session, select
 from app.models.database.trips import Trips, LocationHistory, TripStatusEnum
 from app.models.database.tracking_device import TrackingDevice
-from typing import Sequence, Optional
+from typing import Sequence
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 import datetime
-
-
-async def create_new_trip(create_trip_data: TripCreate, db: Session) -> Trips:
-    try:
-        Trips.model_validate(create_trip_data)
-        trip = Trips(**create_trip_data.model_dump())
-        db.add(trip)
-        db.commit()
-        db.refresh(trip)
-        return trip
-    except Exception as e:
-        db.rollback()
-        raise e
 
 
 async def get_trip_by_id(trip_id: int, db: Session) -> Trips | None:
