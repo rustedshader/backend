@@ -1,7 +1,13 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
-from app.models.schemas.auth import UserCreate, UserCreateResponse, Token
+from app.models.schemas.auth import (
+    UserCreate,
+    UserCreateResponse,
+    Token,
+    RefreshTokenRequest,
+    AccessTokenResponse,
+)
 from app.models.database.base import get_db
 from app.models.database.user import User
 from app.models.schemas.countries import Countries
@@ -15,6 +21,8 @@ from app.utils.security import (
     create_access_token,
     create_refresh_token,
     store_refresh_token,
+    validate_refresh_token,
+    revoke_refresh_token,
 )
 
 
@@ -143,3 +151,65 @@ async def get_my_profile_for_verification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve profile for verification",
         )
+
+
+@router.post("/refresh", response_model=AccessTokenResponse)
+async def refresh_access_token(
+    refresh_request: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Refresh access token using a valid refresh token.
+
+    This endpoint allows clients to get a new access token without
+    requiring the user to log in again, as long as they have a valid refresh token.
+    """
+    # Validate the refresh token
+    payload = await validate_refresh_token(db, refresh_request.refresh_token)
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Extract user info from payload
+    email = payload.get("sub")
+    role = payload.get("role")
+
+    if not email or not role:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create new access token
+    access_token = create_access_token(
+        data={"sub": email, "role": role},
+        expires_delta=3600,  # 1 hour
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post("/logout")
+async def logout(
+    refresh_request: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Logout by revoking the refresh token.
+
+    This prevents the refresh token from being used to generate new access tokens.
+    """
+    success = await revoke_refresh_token(db, refresh_request.refresh_token)
+
+    if success:
+        return {"message": "Successfully logged out"}
+    else:
+        return {"message": "Token already invalid or revoked"}

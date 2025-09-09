@@ -3,7 +3,7 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from app.core.config import settings
 from app.models.database.user import RefreshToken
-from sqlmodel import Session
+from sqlmodel import Session, select
 import secrets
 import string
 
@@ -98,3 +98,69 @@ def generate_api_key(length: int = 32) -> str:
     """Generate a secure random API key."""
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+async def validate_refresh_token(db: Session, refresh_token: str) -> dict | None:
+    """Validate a refresh token and return user data if valid."""
+    try:
+        # First decode the JWT to check if it's valid and not expired
+        payload = decode_token(refresh_token)
+        if not payload:
+            return None
+
+        # Check if the token exists in database and is not revoked
+        statement = select(RefreshToken).where(
+            RefreshToken.token == refresh_token, ~RefreshToken.is_revoked
+        )
+        db_token = db.exec(statement).first()
+
+        if not db_token:
+            return None
+
+        # Check if token is expired (additional check)
+        current_timestamp = int(datetime.utcnow().timestamp())
+        if db_token.expires_at < current_timestamp:
+            # Mark as revoked if expired
+            db_token.is_revoked = True
+            db.add(db_token)
+            db.commit()
+            return None
+
+        return payload
+
+    except Exception:
+        return None
+
+
+async def revoke_refresh_token(db: Session, refresh_token: str) -> bool:
+    """Revoke a refresh token."""
+    try:
+        statement = select(RefreshToken).where(RefreshToken.token == refresh_token)
+        db_token = db.exec(statement).first()
+
+        if db_token:
+            db_token.is_revoked = True
+            db.add(db_token)
+            db.commit()
+            return True
+        return False
+    except Exception:
+        return False
+
+
+async def revoke_all_user_tokens(db: Session, user_id: int) -> bool:
+    """Revoke all refresh tokens for a user (useful for logout all devices)."""
+    try:
+        statement = select(RefreshToken).where(
+            RefreshToken.user_id == user_id, ~RefreshToken.is_revoked
+        )
+        tokens = db.exec(statement).all()
+
+        for token in tokens:
+            token.is_revoked = True
+            db.add(token)
+
+        db.commit()
+        return True
+    except Exception:
+        return False

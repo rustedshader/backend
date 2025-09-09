@@ -186,6 +186,8 @@ class ItineraryRoutingService:
                 to_point.latitude,
                 to_point.longitude,
                 profile,
+                db=db,  # Pass database session for geofencing
+                include_block_areas=True,  # Include restricted areas as blocked areas
             )
 
             if route_data:

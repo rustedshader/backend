@@ -20,6 +20,8 @@ class GraphHopperService:
         end_lat: float,
         end_lon: float,
         profile: str = "car",
+        db: Optional[object] = None,
+        include_block_areas: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """
         Get route between two points using GraphHopper API.
@@ -30,32 +32,52 @@ class GraphHopperService:
             end_lat: Destination latitude
             end_lon: Destination longitude
             profile: Transportation profile (car, foot, bike)
+            db: Database session for fetching restricted areas
+            include_block_areas: Whether to include restricted areas as blocked areas
 
         Returns:
             Route data from GraphHopper API or None if error
         """
         url = f"{self.base_url}/route"
 
-        params = {
-            "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+        # Prepare request payload for POST request
+        payload = {
             "profile": profile,
-            "points_encoded": "false",
+            "points_encoded": False,
+            "points": [
+                [start_lon, start_lat],  # GraphHopper expects [lon, lat]
+                [end_lon, end_lat],
+            ],
         }
+
+        # Add block areas if database session is provided and include_block_areas is True
+        if db and include_block_areas:
+            block_areas = await self._get_active_restricted_areas(db)
+            if block_areas:
+                payload["block_areas"] = block_areas
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params) as response:
+                async with session.post(
+                    url, json=payload, headers={"Content-Type": "application/json"}
+                ) as response:
                     if response.status == 200:
                         return await response.json()
                     else:
                         print(f"GraphHopper API error: {response.status}")
+                        error_text = await response.text()
+                        print(f"Error details: {error_text}")
                         return None
         except Exception as e:
             print(f"Error calling GraphHopper API: {e}")
             return None
 
     async def get_multiple_routes(
-        self, waypoints: List[Tuple[float, float]], profile: str = "car"
+        self,
+        waypoints: List[Tuple[float, float]],
+        profile: str = "car",
+        db: Optional[object] = None,
+        include_block_areas: bool = True,
     ) -> List[Optional[Dict[str, Any]]]:
         """
         Get routes between multiple waypoints.
@@ -63,6 +85,8 @@ class GraphHopperService:
         Args:
             waypoints: List of (lat, lon) tuples
             profile: Transportation profile
+            db: Database session for fetching restricted areas
+            include_block_areas: Whether to include restricted areas as blocked areas
 
         Returns:
             List of route data for each segment
@@ -74,11 +98,37 @@ class GraphHopperService:
             end_lat, end_lon = waypoints[i + 1]
 
             route = await self.get_route(
-                start_lat, start_lon, end_lat, end_lon, profile
+                start_lat,
+                start_lon,
+                end_lat,
+                end_lon,
+                profile,
+                db=db,
+                include_block_areas=include_block_areas,
             )
             routes.append(route)
 
         return routes
+
+    async def _get_active_restricted_areas(self, db: object) -> List[str]:
+        """
+        Get all active restricted areas as WKT POLYGON strings for block_areas.
+
+        Args:
+            db: Database session
+
+        Returns:
+            List of WKT POLYGON strings representing restricted areas
+        """
+        try:
+            # Import the dedicated geofencing function
+            from app.services.geofencing import get_active_restricted_areas_for_routing
+
+            return await get_active_restricted_areas_for_routing(db)
+
+        except Exception as e:
+            print(f"Error fetching restricted areas for routing: {e}")
+            return []
 
     def extract_route_summary(self, route_data: Dict[str, Any]) -> Dict[str, Any]:
         """

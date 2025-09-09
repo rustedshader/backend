@@ -10,11 +10,16 @@ from app.api.v1.routes.admin import router as admin_router
 from app.api.v1.routes.itinerary import router as itinerary_router
 from app.api.v1.routes.places import router as places_router
 from app.api.v1.routes.routing import router as routing_router
+from app.api.v1.routes.routing_test import router as routing_test_router
+from app.api.v1.routes.geofencing import router as geofencing_router
+from app.api.v1.routes.alerts import router as alerts_router
 from app.models.database.base import create_db_and_tables
 
 # Import all models to ensure they are registered with SQLModel.metadata
 from app.models import User, RefreshToken, Trek, TrackingDevice  # noqa: F401
 from app.models.database.itinerary import Itinerary, ItineraryDay  # noqa: F401
+from app.models.database.geofencing import RestrictedAreas, GeofenceViolations  # noqa: F401
+from app.models.database.trips import Alerts  # noqa: F401
 
 
 @asynccontextmanager
@@ -36,3 +41,6 @@ app.include_router(router=tourist_id_router)
 app.include_router(router=admin_router)
 app.include_router(router=places_router)
 app.include_router(router=routing_router)
+app.include_router(router=routing_test_router)
+app.include_router(router=geofencing_router)
+app.include_router(router=alerts_router)
