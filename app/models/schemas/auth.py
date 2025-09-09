@@ -92,3 +92,54 @@ class UserVerificationProfile(BaseModel):
 class TokenData(BaseModel):
     email: str | None = None
     role: str | None = None
+
+
+class UserListResponse(BaseModel):
+    """Response model for user list with pagination info"""
+
+    users: list[UserResponse]
+    total_count: int
+    offset: int
+    limit: int
+
+
+class UserVerificationRequest(BaseModel):
+    """Request model for user verification"""
+
+    verification_notes: str | None = None
+
+
+class UserVerificationResponse(BaseModel):
+    """Response model for user verification"""
+
+    success: bool
+    message: str
+    user: UserResponse
+
+
+class BlockchainInfoResponse(BaseModel):
+    """Response model for user blockchain information"""
+
+    user_id: int
+    blockchain_address: str | None = None
+    tourist_id_token: int | None = None
+    tourist_id_transaction_hash: str | None = None
+    has_blockchain_id: bool
+    is_kyc_verified: bool
+
+
+class UserStatsResponse(BaseModel):
+    """Response model for user statistics"""
+
+    total_users: int
+    by_role: dict
+    by_verification: dict
+    by_status: dict
+    blockchain_ids_issued: int
+
+
+class UserStatusUpdateRequest(BaseModel):
+    """Request model for updating user status"""
+
+    is_active: bool
+    reason: str | None = None
