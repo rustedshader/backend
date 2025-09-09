@@ -44,46 +44,5 @@ class TouristIDService:
             print(f"Error revoking tourist ID: {e}")
             return False
 
-    def reissue_tourist_id(
-        self, user: User, db: Session, validity_seconds: int = 365 * 24 * 3600
-    ) -> Optional[tuple[int, str]]:
-        """Reissue a tourist ID for a user (useful for renewals)."""
-        try:
-            # Create KYC hash from user data
-            kyc_data = {
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "email": user.email,
-                "country_code": user.country_code,
-                "aadhar_hash": user.aadhar_number_hash,
-                "passport_hash": user.passport_number_hash,
-            }
-            import json
-
-            kyc_json = json.dumps(kyc_data, sort_keys=True)
-            kyc_hash = self.blockchain_client.bytes32_from_text(kyc_json)
-
-            # Create a basic itinerary hash (can be updated later)
-            basic_itinerary = f"reissued_itinerary_for_{user.email}"
-            itinerary_hash = self.blockchain_client.bytes32_from_text(basic_itinerary)
-
-            # Issue new tourist ID
-            token_id, receipt = self.blockchain_client.issue_id(
-                tourist=user.blockchain_address,
-                kyc_hash_hex32=kyc_hash,
-                itinerary_hash_hex32=itinerary_hash,
-                validity_seconds=validity_seconds,
-            )
-
-            # Update user record
-            user.tourist_id_token = token_id
-            user.tourist_id_transaction_hash = receipt.transactionHash.hex()
-            db.add(user)
-            db.commit()
-
-            return token_id, receipt.transactionHash.hex()
-
-        except Exception as e:
-            print(f"Error reissuing tourist ID: {e}")
-            db.rollback()
-            return None
+    # Note: Tourist ID issuance/reissuance is now handled exclusively by admins
+    # via the admin endpoints at entry points for security compliance

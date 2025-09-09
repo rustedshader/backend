@@ -21,6 +21,13 @@ from app.models.database.guides import (
 )
 from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
 from app.models.database.user import User, UserRoleEnum, RefreshToken
+from app.models.database.itinerary import (
+    Itinerary,
+    ItineraryDay,
+    ItineraryStatusEnum,
+    AccommodationTypeEnum,
+    TransportModeEnum,
+)
 from app.core.config import settings
 from app.models.database.base import SQLModel
 

@@ -18,6 +18,7 @@ class Trips(SQLModel, table=True):
     __tablename__ = "trips"
     id: int = Field(default=None, primary_key=True, index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
+    itinerary_id: Optional[int] = Field(foreign_key="itineraries.id", index=True)
     trek_id: int = Field(foreign_key="treks.id", index=True)
     guide_id: Optional[int] = Field(foreign_key="guides.id", index=True)
     tracking_deivce_id: Optional[int] = Field(
