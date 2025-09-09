@@ -6,7 +6,6 @@ from datetime import datetime
 
 from shapely.geometry import Polygon, Point
 from shapely.wkt import dumps, loads
-from geoalchemy2 import WKTElement
 from shapely.validation import make_valid
 
 from app.models.database.geofencing import RestrictedAreas, GeofenceViolations
@@ -139,9 +138,6 @@ async def create_restricted_area(
         # Convert coordinates to WKT polygon using Shapely (includes validation)
         wkt_polygon = coordinates_to_wkt_polygon(area_data.boundary_coordinates)
 
-        # Create GeoAlchemy2 WKTElement for seamless PostGIS integration
-        geom_element = WKTElement(wkt_polygon, srid=4326)
-
         # Create the restricted area
         restricted_area = RestrictedAreas(
             name=area_data.name,
@@ -162,14 +158,14 @@ async def create_restricted_area(
         db.add(restricted_area)
         db.flush()  # Get the ID
 
-        # Update with geometry using GeoAlchemy2 WKTElement
+        # Update with geometry using WKT string and ST_GeomFromText
         db.execute(
             text("""
                 UPDATE restricted_areas 
-                SET boundary = :geom
+                SET boundary = ST_GeomFromText(:wkt_polygon, 4326)
                 WHERE id = :area_id
             """),
-            {"geom": geom_element, "area_id": restricted_area.id},
+            {"wkt_polygon": wkt_polygon, "area_id": restricted_area.id},
         )
 
         db.commit()
