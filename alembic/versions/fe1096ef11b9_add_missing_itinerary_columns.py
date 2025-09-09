@@ -22,6 +22,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # Create the enum type if it doesn't exist
+    conn = op.get_bind()
+
+    # Check if enum exists
+    result = conn.execute(
+        sa.text("SELECT 1 FROM pg_type WHERE typname = 'itinerarytypeenum'")
+    ).fetchone()
+
+    if not result:
+        # Create the enum type
+        conn.execute(
+            sa.text(
+                "CREATE TYPE itinerarytypeenum AS ENUM ('TREK', 'CITY_TOUR', 'MIXED')"
+            )
+        )
+
     # Add missing columns to itineraries table
     op.add_column(
         "itineraries",
