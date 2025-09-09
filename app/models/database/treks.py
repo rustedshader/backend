@@ -26,6 +26,11 @@ class Trek(SQLModel, table=True):
     duration: int = Field(index=True)  # duration in hours
     altitude: Optional[int] = Field(default=None, index=True)  # in meters
     nearest_town: Optional[str] = Field(default=None, index=True)
+
+    # Starting point coordinates for the trek
+    start_latitude: Optional[float] = Field(default=None, index=True)
+    start_longitude: Optional[float] = Field(default=None, index=True)
+
     best_season: Optional[str] = Field(default=None)
     permits_required: Optional[str] = Field(default=None)
     equipment_needed: Optional[str] = Field(default=None)

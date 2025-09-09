@@ -9,6 +9,7 @@ from app.api.v1.routes.tourist_id import router as tourist_id_router
 from app.api.v1.routes.admin import router as admin_router
 from app.api.v1.routes.itinerary import router as itinerary_router
 from app.api.v1.routes.places import router as places_router
+from app.api.v1.routes.routing import router as routing_router
 from app.models.database.base import create_db_and_tables
 
 # Import all models to ensure they are registered with SQLModel.metadata
@@ -34,3 +35,4 @@ app.include_router(router=tracking_device_router)
 app.include_router(router=tourist_id_router)
 app.include_router(router=admin_router)
 app.include_router(router=places_router)
+app.include_router(router=routing_router)
