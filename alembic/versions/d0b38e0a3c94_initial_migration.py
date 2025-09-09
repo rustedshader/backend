@@ -1,8 +1,8 @@
-"""initial migration
+"""Initial Migration
 
-Revision ID: 5e5e1a055bfd
+Revision ID: d0b38e0a3c94
 Revises:
-Create Date: 2025-09-07 23:49:57.954109
+Create Date: 2025-09-09 21:12:42.830332
 
 """
 
@@ -15,7 +15,7 @@ import geoalchemy2
 
 
 # revision identifiers, used by Alembic.
-revision: str = "5e5e1a055bfd"
+revision: str = "d0b38e0a3c94"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -62,6 +62,12 @@ def upgrade() -> None:
         ),
         sa.Column(
             "blockchain_address", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("tourist_id_token", sa.Integer(), nullable=True),
+        sa.Column(
+            "tourist_id_transaction_hash",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=True,
         ),
         sa.Column("is_kyc_verified", sa.Boolean(), nullable=False),
         sa.Column("is_email_verified", sa.Boolean(), nullable=False),
@@ -134,6 +140,85 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_guides_id"), "guides", ["id"], unique=False)
     op.create_index(op.f("ix_guides_user_id"), "guides", ["user_id"], unique=True)
+    op.create_table(
+        "places",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("description", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column(
+            "place_type",
+            sa.Enum(
+                "TREK",
+                "CITY_TOUR",
+                "HISTORICAL_SITE",
+                "TEMPLE",
+                "MUSEUM",
+                "PARK",
+                "BEACH",
+                "HILL_STATION",
+                "ADVENTURE_SPORT",
+                "CULTURAL_SITE",
+                "RESTAURANT",
+                "SHOPPING",
+                "NIGHTLIFE",
+                "OTHER",
+                name="placetypeenum",
+            ),
+            nullable=False,
+        ),
+        sa.Column("city", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("state", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("country", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("address", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("latitude", sa.Float(), nullable=False),
+        sa.Column("longitude", sa.Float(), nullable=False),
+        sa.Column("duration_hours", sa.Integer(), nullable=True),
+        sa.Column("entry_fee", sa.Float(), nullable=True),
+        sa.Column("best_season", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("wheelchair_accessible", sa.Boolean(), nullable=False),
+        sa.Column("safety_rating", sa.Integer(), nullable=True),
+        sa.Column("contact_number", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("email", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("website", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("opening_time", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("closing_time", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("is_active", sa.Boolean(), nullable=False),
+        sa.Column("is_featured", sa.Boolean(), nullable=False),
+        sa.Column("created_by_admin_id", sa.Integer(), nullable=False),
+        sa.Column("created_at", sa.Integer(), nullable=False),
+        sa.Column("updated_at", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["created_by_admin_id"],
+            ["users.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_places_city"), "places", ["city"], unique=False)
+    op.create_index(op.f("ix_places_country"), "places", ["country"], unique=False)
+    op.create_index(
+        op.f("ix_places_created_at"), "places", ["created_at"], unique=False
+    )
+    op.create_index(
+        op.f("ix_places_created_by_admin_id"),
+        "places",
+        ["created_by_admin_id"],
+        unique=False,
+    )
+    op.create_index(op.f("ix_places_id"), "places", ["id"], unique=False)
+    op.create_index(op.f("ix_places_is_active"), "places", ["is_active"], unique=False)
+    op.create_index(
+        op.f("ix_places_is_featured"), "places", ["is_featured"], unique=False
+    )
+    op.create_index(op.f("ix_places_latitude"), "places", ["latitude"], unique=False)
+    op.create_index(op.f("ix_places_longitude"), "places", ["longitude"], unique=False)
+    op.create_index(op.f("ix_places_name"), "places", ["name"], unique=False)
+    op.create_index(
+        op.f("ix_places_place_type"), "places", ["place_type"], unique=False
+    )
+    op.create_index(op.f("ix_places_state"), "places", ["state"], unique=False)
+    op.create_index(
+        op.f("ix_places_updated_at"), "places", ["updated_at"], unique=False
+    )
     op.create_table(
         "treks",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -242,6 +327,146 @@ def upgrade() -> None:
         op.f("ix_guide_treks_trek_id"), "guide_treks", ["trek_id"], unique=False
     )
     op.create_table(
+        "itineraries",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "itinerary_type",
+            sa.Enum("TREK", "CITY_TOUR", "MIXED", name="itinerarytypeenum"),
+            nullable=False,
+        ),
+        sa.Column("trek_id", sa.Integer(), nullable=True),
+        sa.Column("primary_place_id", sa.Integer(), nullable=True),
+        sa.Column("title", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("description", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column(
+            "destination_city", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "destination_state", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "destination_country", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("end_date", sa.Date(), nullable=False),
+        sa.Column("total_duration_days", sa.Integer(), nullable=False),
+        sa.Column("estimated_budget", sa.Float(), nullable=True),
+        sa.Column("number_of_travelers", sa.Integer(), nullable=False),
+        sa.Column(
+            "purpose_of_visit", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "DRAFT",
+                "SUBMITTED",
+                "APPROVED",
+                "ACTIVE",
+                "COMPLETED",
+                "CANCELLED",
+                name="itinerarystatusenum",
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "emergency_contact_name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "emergency_contact_phone",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column(
+            "emergency_contact_relation",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column(
+            "preferred_language", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "special_requirements", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("created_at", sa.Integer(), nullable=False),
+        sa.Column("updated_at", sa.Integer(), nullable=False),
+        sa.Column("approved_at", sa.Integer(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["primary_place_id"],
+            ["places.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["trek_id"],
+            ["treks.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_itineraries_created_at"), "itineraries", ["created_at"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itineraries_destination_city"),
+        "itineraries",
+        ["destination_city"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itineraries_destination_country"),
+        "itineraries",
+        ["destination_country"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itineraries_destination_state"),
+        "itineraries",
+        ["destination_state"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itineraries_end_date"), "itineraries", ["end_date"], unique=False
+    )
+    op.create_index(op.f("ix_itineraries_id"), "itineraries", ["id"], unique=False)
+    op.create_index(
+        op.f("ix_itineraries_itinerary_type"),
+        "itineraries",
+        ["itinerary_type"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itineraries_primary_place_id"),
+        "itineraries",
+        ["primary_place_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itineraries_start_date"), "itineraries", ["start_date"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itineraries_status"), "itineraries", ["status"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itineraries_title"), "itineraries", ["title"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itineraries_total_duration_days"),
+        "itineraries",
+        ["total_duration_days"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itineraries_trek_id"), "itineraries", ["trek_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itineraries_updated_at"), "itineraries", ["updated_at"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itineraries_user_id"), "itineraries", ["user_id"], unique=False
+    )
+    op.create_table(
         "tracking_devices",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("device_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
@@ -327,6 +552,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("trek_id"),
     )
+    # Use IF NOT EXISTS to prevent duplicate index error
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_trek_route_data_route ON trek_route_data USING gist (route)"
     )
@@ -346,10 +572,138 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
+        "itinerary_days",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("itinerary_id", sa.Integer(), nullable=False),
+        sa.Column("day_number", sa.Integer(), nullable=False),
+        sa.Column("date", sa.Date(), nullable=False),
+        sa.Column(
+            "day_type",
+            sa.Enum("TREK_DAY", "PLACE_VISIT_DAY", name="daytypeenum"),
+            nullable=False,
+        ),
+        sa.Column("trek_id", sa.Integer(), nullable=True),
+        sa.Column("primary_place_id", sa.Integer(), nullable=True),
+        sa.Column(
+            "planned_activities", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "estimated_time_start", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "estimated_time_end", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "accommodation_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "accommodation_type",
+            sa.Enum(
+                "HOTEL",
+                "GUEST_HOUSE",
+                "HOMESTAY",
+                "CAMPING",
+                "HOSTEL",
+                "RESORT",
+                "OTHER",
+                name="accommodationtypeenum",
+            ),
+            nullable=True,
+        ),
+        sa.Column(
+            "accommodation_address", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "accommodation_contact", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("accommodation_latitude", sa.Float(), nullable=True),
+        sa.Column("accommodation_longitude", sa.Float(), nullable=True),
+        sa.Column(
+            "transport_mode",
+            sa.Enum(
+                "FLIGHT",
+                "TRAIN",
+                "BUS",
+                "CAR",
+                "TAXI",
+                "WALKING",
+                "OTHER",
+                name="transportmodeenum",
+            ),
+            nullable=True,
+        ),
+        sa.Column(
+            "transport_details", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("risk_level", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("safety_notes", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column(
+            "special_instructions", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("created_at", sa.Integer(), nullable=False),
+        sa.Column("updated_at", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["itinerary_id"],
+            ["itineraries.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["primary_place_id"],
+            ["places.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["trek_id"],
+            ["treks.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_created_at"),
+        "itinerary_days",
+        ["created_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_date"), "itinerary_days", ["date"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_day_number"),
+        "itinerary_days",
+        ["day_number"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_day_type"), "itinerary_days", ["day_type"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_id"), "itinerary_days", ["id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_itinerary_id"),
+        "itinerary_days",
+        ["itinerary_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_primary_place_id"),
+        "itinerary_days",
+        ["primary_place_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_trek_id"), "itinerary_days", ["trek_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_itinerary_days_updated_at"),
+        "itinerary_days",
+        ["updated_at"],
+        unique=False,
+    )
+    op.create_table(
         "trips",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("trek_id", sa.Integer(), nullable=False),
+        sa.Column("itinerary_id", sa.Integer(), nullable=True),
+        sa.Column("trek_id", sa.Integer(), nullable=True),
         sa.Column("guide_id", sa.Integer(), nullable=True),
         sa.Column("tracking_deivce_id", sa.Integer(), nullable=True),
         sa.Column("start_date", sa.Date(), nullable=False),
@@ -370,6 +724,10 @@ def upgrade() -> None:
             ["guides.id"],
         ),
         sa.ForeignKeyConstraint(
+            ["itinerary_id"],
+            ["itineraries.id"],
+        ),
+        sa.ForeignKeyConstraint(
             ["tracking_deivce_id"],
             ["tracking_devices.id"],
         ),
@@ -386,6 +744,9 @@ def upgrade() -> None:
     op.create_index(op.f("ix_trips_end_date"), "trips", ["end_date"], unique=False)
     op.create_index(op.f("ix_trips_guide_id"), "trips", ["guide_id"], unique=False)
     op.create_index(op.f("ix_trips_id"), "trips", ["id"], unique=False)
+    op.create_index(
+        op.f("ix_trips_itinerary_id"), "trips", ["itinerary_id"], unique=False
+    )
     op.create_index(op.f("ix_trips_start_date"), "trips", ["start_date"], unique=False)
     op.create_index(op.f("ix_trips_status"), "trips", ["status"], unique=False)
     op.create_index(
@@ -429,10 +790,10 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    # Use IF NOT EXISTS to prevent duplicate index error
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_alerts_location ON alerts USING gist (location)"
     )
-
     op.create_index(
         op.f("ix_alerts_alert_type"), "alerts", ["alert_type"], unique=False
     )
@@ -462,6 +823,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    # Use IF NOT EXISTS to prevent duplicate index error
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_location_history_location ON location_history USING gist (location)"
     )
@@ -480,64 +842,53 @@ def upgrade() -> None:
         ["trip_id"],
         unique=False,
     )
-    # op.drop_table("spatial_ref_sys")
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.create_table(
-        "spatial_ref_sys",
-        sa.Column("srid", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column(
-            "auth_name", sa.VARCHAR(length=256), autoincrement=False, nullable=True
-        ),
-        sa.Column("auth_srid", sa.INTEGER(), autoincrement=False, nullable=True),
-        sa.Column(
-            "srtext", sa.VARCHAR(length=2048), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "proj4text", sa.VARCHAR(length=2048), autoincrement=False, nullable=True
-        ),
-        sa.CheckConstraint(
-            "srid > 0 AND srid <= 998999", name=op.f("spatial_ref_sys_srid_check")
-        ),
-        sa.PrimaryKeyConstraint("srid", name=op.f("spatial_ref_sys_pkey")),
-    )
     op.drop_index(op.f("ix_location_history_trip_id"), table_name="location_history")
     op.drop_index(op.f("ix_location_history_timestamp"), table_name="location_history")
     op.drop_index(op.f("ix_location_history_id"), table_name="location_history")
-    op.drop_index(
-        "idx_location_history_location",
-        table_name="location_history",
-        postgresql_using="gist",
-    )
+    # Use IF EXISTS to prevent errors if index doesn't exist
+    op.execute("DROP INDEX IF EXISTS idx_location_history_location")
     op.drop_table("location_history")
     op.drop_index(op.f("ix_alerts_trip_id"), table_name="alerts")
     op.drop_index(op.f("ix_alerts_timestamp"), table_name="alerts")
     op.drop_index(op.f("ix_alerts_status"), table_name="alerts")
     op.drop_index(op.f("ix_alerts_id"), table_name="alerts")
     op.drop_index(op.f("ix_alerts_alert_type"), table_name="alerts")
-    op.drop_index("idx_alerts_location", table_name="alerts", postgresql_using="gist")
+    # Use IF EXISTS to prevent errors if index doesn't exist
+    op.execute("DROP INDEX IF EXISTS idx_alerts_location")
     op.drop_table("alerts")
     op.drop_index(op.f("ix_trips_user_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_trek_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_tracking_deivce_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_status"), table_name="trips")
     op.drop_index(op.f("ix_trips_start_date"), table_name="trips")
+    op.drop_index(op.f("ix_trips_itinerary_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_guide_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_end_date"), table_name="trips")
     op.drop_table("trips")
+    op.drop_index(op.f("ix_itinerary_days_updated_at"), table_name="itinerary_days")
+    op.drop_index(op.f("ix_itinerary_days_trek_id"), table_name="itinerary_days")
+    op.drop_index(
+        op.f("ix_itinerary_days_primary_place_id"), table_name="itinerary_days"
+    )
+    op.drop_index(op.f("ix_itinerary_days_itinerary_id"), table_name="itinerary_days")
+    op.drop_index(op.f("ix_itinerary_days_id"), table_name="itinerary_days")
+    op.drop_index(op.f("ix_itinerary_days_day_type"), table_name="itinerary_days")
+    op.drop_index(op.f("ix_itinerary_days_day_number"), table_name="itinerary_days")
+    op.drop_index(op.f("ix_itinerary_days_date"), table_name="itinerary_days")
+    op.drop_index(op.f("ix_itinerary_days_created_at"), table_name="itinerary_days")
+    op.drop_table("itinerary_days")
     op.drop_index(op.f("ix_trek_route_data_updated_at"), table_name="trek_route_data")
     op.drop_index(op.f("ix_trek_route_data_trek_id"), table_name="trek_route_data")
     op.drop_index(op.f("ix_trek_route_data_created_at"), table_name="trek_route_data")
-    op.drop_index(
-        "idx_trek_route_data_route",
-        table_name="trek_route_data",
-        postgresql_using="gist",
-    )
+    # Use IF EXISTS to prevent errors if index doesn't exist
+    op.execute("DROP INDEX IF EXISTS idx_trek_route_data_route")
     op.drop_table("trek_route_data")
     op.drop_index(op.f("ix_tracking_devices_updated_at"), table_name="tracking_devices")
     op.drop_index(op.f("ix_tracking_devices_treck_id"), table_name="tracking_devices")
@@ -547,6 +898,22 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_tracking_devices_created_at"), table_name="tracking_devices")
     op.drop_index(op.f("ix_tracking_devices_api_key"), table_name="tracking_devices")
     op.drop_table("tracking_devices")
+    op.drop_index(op.f("ix_itineraries_user_id"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_updated_at"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_trek_id"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_total_duration_days"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_title"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_status"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_start_date"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_primary_place_id"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_itinerary_type"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_id"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_end_date"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_destination_state"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_destination_country"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_destination_city"), table_name="itineraries")
+    op.drop_index(op.f("ix_itineraries_created_at"), table_name="itineraries")
+    op.drop_table("itineraries")
     op.drop_index(op.f("ix_guide_treks_trek_id"), table_name="guide_treks")
     op.drop_index(op.f("ix_guide_treks_is_active"), table_name="guide_treks")
     op.drop_index(op.f("ix_guide_treks_id"), table_name="guide_treks")
@@ -572,6 +939,20 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_treks_city"), table_name="treks")
     op.drop_index(op.f("ix_treks_altitude"), table_name="treks")
     op.drop_table("treks")
+    op.drop_index(op.f("ix_places_updated_at"), table_name="places")
+    op.drop_index(op.f("ix_places_state"), table_name="places")
+    op.drop_index(op.f("ix_places_place_type"), table_name="places")
+    op.drop_index(op.f("ix_places_name"), table_name="places")
+    op.drop_index(op.f("ix_places_longitude"), table_name="places")
+    op.drop_index(op.f("ix_places_latitude"), table_name="places")
+    op.drop_index(op.f("ix_places_is_featured"), table_name="places")
+    op.drop_index(op.f("ix_places_is_active"), table_name="places")
+    op.drop_index(op.f("ix_places_id"), table_name="places")
+    op.drop_index(op.f("ix_places_created_by_admin_id"), table_name="places")
+    op.drop_index(op.f("ix_places_created_at"), table_name="places")
+    op.drop_index(op.f("ix_places_country"), table_name="places")
+    op.drop_index(op.f("ix_places_city"), table_name="places")
+    op.drop_table("places")
     op.drop_index(op.f("ix_guides_user_id"), table_name="guides")
     op.drop_index(op.f("ix_guides_id"), table_name="guides")
     op.drop_table("guides")
