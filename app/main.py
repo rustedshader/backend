@@ -8,6 +8,7 @@ from app.api.v1.routes.guide import router as guide_router
 from app.api.v1.routes.tourist_id import router as tourist_id_router
 from app.api.v1.routes.admin import router as admin_router
 from app.api.v1.routes.itinerary import router as itinerary_router
+from app.api.v1.routes.places import router as places_router
 from app.models.database.base import create_db_and_tables
 
 # Import all models to ensure they are registered with SQLModel.metadata
@@ -26,11 +27,10 @@ app = fastapi.FastAPI(title="SIH Backend API", version="1.0.0", lifespan=lifespa
 
 app.include_router(router=auth_router)
 app.include_router(router=guide_router)
-app.include_router(router=trek_router)
+app.include_router(router=itinerary_router)
 app.include_router(router=trips_router)
+app.include_router(router=trek_router)
 app.include_router(router=tracking_device_router)
 app.include_router(router=tourist_id_router)
 app.include_router(router=admin_router)
-app.include_router(
-    router=itinerary_router, prefix="/api/v1/itineraries", tags=["itineraries"]
-)
+app.include_router(router=places_router)

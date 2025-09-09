@@ -3,7 +3,7 @@ from enum import Enum as PyEnum
 from typing import Optional
 import datetime
 from geoalchemy2 import Geometry
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum, Text
+from sqlalchemy import Column
 from typing import Any
 
 
@@ -19,7 +19,7 @@ class Trips(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True, index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     itinerary_id: Optional[int] = Field(foreign_key="itineraries.id", index=True)
-    trek_id: int = Field(foreign_key="treks.id", index=True)
+    trek_id: Optional[int] = Field(foreign_key="treks.id", index=True, default=None)
     guide_id: Optional[int] = Field(foreign_key="guides.id", index=True)
     tracking_deivce_id: Optional[int] = Field(
         foreign_key="tracking_devices.id", index=True
