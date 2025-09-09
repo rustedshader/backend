@@ -14,6 +14,8 @@ from app.models.schemas.geofencing import (
     GeofenceCheckResponse,
     RestrictedAreaStatusEnum,
     RestrictedAreaTypeEnum,
+    PolygonValidationRequest,
+    PolygonValidationResponse,
 )
 from app.services.geofencing import (
     create_restricted_area,
@@ -22,6 +24,7 @@ from app.services.geofencing import (
     update_restricted_area,
     delete_restricted_area,
     check_location_restrictions,
+    validate_polygon_geometry,
 )
 
 router = APIRouter(prefix="/geofencing", tags=["geofencing"])
@@ -275,3 +278,29 @@ def _get_status_type_description(status_type: RestrictedAreaStatusEnum) -> str:
         RestrictedAreaStatusEnum.TEMPORARILY_DISABLED: "Area restriction is temporarily disabled for maintenance or other reasons",
     }
     return descriptions.get(status_type, "No description available")
+
+
+@router.post("/validate-polygon", response_model=PolygonValidationResponse)
+async def validate_polygon(
+    validation_request: PolygonValidationRequest,
+    _: User = Depends(get_current_user),  # Any authenticated user can validate
+):
+    """
+    Validate polygon geometry using Shapely.
+
+    This endpoint validates polygon coordinates and provides:
+    - Geometry validation (is_valid)
+    - Approximate area and perimeter calculations
+    - Centroid and bounding box information
+    - Detailed error messages for invalid geometries
+
+    Useful for frontend validation before creating restricted areas.
+    """
+    try:
+        validation_result = validate_polygon_geometry(validation_request.coordinates)
+        return PolygonValidationResponse(**validation_result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Polygon validation failed: {str(e)}",
+        )

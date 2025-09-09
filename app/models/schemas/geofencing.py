@@ -26,6 +26,33 @@ class PolygonCoordinate(BaseModel):
     latitude: float = Field(..., ge=-90, le=90, description="Latitude coordinate")
 
 
+class PolygonValidationResponse(BaseModel):
+    """Response schema for polygon geometry validation"""
+
+    is_valid: bool = Field(..., description="Whether the polygon geometry is valid")
+    area_sq_meters: Optional[float] = Field(
+        None, description="Approximate area in square meters"
+    )
+    perimeter_meters: Optional[float] = Field(
+        None, description="Approximate perimeter in meters"
+    )
+    centroid: Optional[dict] = Field(None, description="Polygon centroid coordinates")
+    bounds: Optional[dict] = Field(None, description="Bounding box coordinates")
+    errors: List[str] = Field(
+        default_factory=list, description="List of validation errors"
+    )
+
+
+class PolygonValidationRequest(BaseModel):
+    """Request schema for polygon validation"""
+
+    coordinates: List[PolygonCoordinate] = Field(
+        ...,
+        min_items=3,
+        description="Array of coordinate points forming the polygon boundary (minimum 3 points)",
+    )
+
+
 class RestrictedAreaCreate(BaseModel):
     """Schema for creating a new restricted area"""
 
