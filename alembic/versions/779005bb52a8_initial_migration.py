@@ -1,8 +1,8 @@
 """Initial Migration
 
-Revision ID: d0b38e0a3c94
+Revision ID: 779005bb52a8
 Revises:
-Create Date: 2025-09-09 21:12:42.830332
+Create Date: 2025-09-10 00:17:39.530701
 
 """
 
@@ -15,7 +15,7 @@ import geoalchemy2
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d0b38e0a3c94"
+revision: str = "779005bb52a8"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -231,6 +231,8 @@ def upgrade() -> None:
         sa.Column("duration", sa.Integer(), nullable=False),
         sa.Column("altitude", sa.Integer(), nullable=True),
         sa.Column("nearest_town", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("start_latitude", sa.Float(), nullable=True),
+        sa.Column("start_longitude", sa.Float(), nullable=True),
         sa.Column("best_season", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column(
             "permits_required", sqlmodel.sql.sqltypes.AutoString(), nullable=True
@@ -292,6 +294,12 @@ def upgrade() -> None:
     op.create_index(op.f("ix_treks_name"), "treks", ["name"], unique=False)
     op.create_index(
         op.f("ix_treks_nearest_town"), "treks", ["nearest_town"], unique=False
+    )
+    op.create_index(
+        op.f("ix_treks_start_latitude"), "treks", ["start_latitude"], unique=False
+    )
+    op.create_index(
+        op.f("ix_treks_start_longitude"), "treks", ["start_longitude"], unique=False
     )
     op.create_index(op.f("ix_treks_state"), "treks", ["state"], unique=False)
     op.create_table(
@@ -531,6 +539,63 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
+        "trek_paths",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("trek_id", sa.Integer(), nullable=False),
+        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("description", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column(
+            "path_coordinates",
+            geoalchemy2.types.Geometry(
+                geometry_type="LINESTRING",
+                srid=4326,
+                dimension=2,
+                from_text="ST_GeomFromEWKT",
+                name="geometry",
+            ),
+            nullable=True,
+        ),
+        sa.Column("total_distance_meters", sa.Float(), nullable=False),
+        sa.Column("estimated_duration_hours", sa.Float(), nullable=False),
+        sa.Column("elevation_gain_meters", sa.Float(), nullable=True),
+        sa.Column("difficulty_rating", sa.Integer(), nullable=True),
+        sa.Column("waypoints", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("safety_notes", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("created_at", sa.Integer(), nullable=False),
+        sa.Column("is_active", sa.Boolean(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["trek_id"],
+            ["treks.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_trek_paths_path_coordinates ON trek_paths USING gist (path_coordinates)"
+    )
+    op.create_index(
+        op.f("ix_trek_paths_created_at"), "trek_paths", ["created_at"], unique=False
+    )
+    op.create_index(
+        op.f("ix_trek_paths_estimated_duration_hours"),
+        "trek_paths",
+        ["estimated_duration_hours"],
+        unique=False,
+    )
+    op.create_index(op.f("ix_trek_paths_id"), "trek_paths", ["id"], unique=False)
+    op.create_index(
+        op.f("ix_trek_paths_is_active"), "trek_paths", ["is_active"], unique=False
+    )
+    op.create_index(op.f("ix_trek_paths_name"), "trek_paths", ["name"], unique=False)
+    op.create_index(
+        op.f("ix_trek_paths_total_distance_meters"),
+        "trek_paths",
+        ["total_distance_meters"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_trek_paths_trek_id"), "trek_paths", ["trek_id"], unique=False
+    )
+    op.create_table(
         "trek_route_data",
         sa.Column("trek_id", sa.Integer(), nullable=False),
         sa.Column(
@@ -552,7 +617,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("trek_id"),
     )
-    # Use IF NOT EXISTS to prevent duplicate index error
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_trek_route_data_route ON trek_route_data USING gist (route)"
     )
@@ -712,13 +776,40 @@ def upgrade() -> None:
             "status",
             sa.Enum(
                 "ASSIGNED",
-                "IN_PROGRESS",
+                "STARTED",
+                "VISITING",
+                "RETURNING",
                 "COMPLETED",
                 "CANCELLED",
                 name="tripstatusenum",
             ),
             nullable=False,
         ),
+        sa.Column(
+            "trip_type",
+            sa.Enum("TREK_DAY", "TOUR_DAY", name="triptypeenum"),
+            nullable=False,
+        ),
+        sa.Column("current_phase", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("hotel_latitude", sa.Float(), nullable=True),
+        sa.Column("hotel_longitude", sa.Float(), nullable=True),
+        sa.Column("hotel_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("destination_latitude", sa.Float(), nullable=True),
+        sa.Column("destination_longitude", sa.Float(), nullable=True),
+        sa.Column(
+            "destination_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("trek_start_latitude", sa.Float(), nullable=True),
+        sa.Column("trek_start_longitude", sa.Float(), nullable=True),
+        sa.Column("trek_end_latitude", sa.Float(), nullable=True),
+        sa.Column("trek_end_longitude", sa.Float(), nullable=True),
+        sa.Column("tracking_started_at", sa.DateTime(), nullable=True),
+        sa.Column("tracking_ended_at", sa.DateTime(), nullable=True),
+        sa.Column("is_tracking_active", sa.Boolean(), nullable=False),
+        sa.Column(
+            "linked_device_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("device_linked_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
             ["guide_id"],
             ["guides.id"],
@@ -741,11 +832,44 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_trips_current_phase"), "trips", ["current_phase"], unique=False
+    )
+    op.create_index(
+        op.f("ix_trips_destination_latitude"),
+        "trips",
+        ["destination_latitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_trips_destination_longitude"),
+        "trips",
+        ["destination_longitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_trips_device_linked_at"), "trips", ["device_linked_at"], unique=False
+    )
     op.create_index(op.f("ix_trips_end_date"), "trips", ["end_date"], unique=False)
     op.create_index(op.f("ix_trips_guide_id"), "trips", ["guide_id"], unique=False)
+    op.create_index(
+        op.f("ix_trips_hotel_latitude"), "trips", ["hotel_latitude"], unique=False
+    )
+    op.create_index(
+        op.f("ix_trips_hotel_longitude"), "trips", ["hotel_longitude"], unique=False
+    )
     op.create_index(op.f("ix_trips_id"), "trips", ["id"], unique=False)
     op.create_index(
+        op.f("ix_trips_is_tracking_active"),
+        "trips",
+        ["is_tracking_active"],
+        unique=False,
+    )
+    op.create_index(
         op.f("ix_trips_itinerary_id"), "trips", ["itinerary_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_trips_linked_device_id"), "trips", ["linked_device_id"], unique=False
     )
     op.create_index(op.f("ix_trips_start_date"), "trips", ["start_date"], unique=False)
     op.create_index(op.f("ix_trips_status"), "trips", ["status"], unique=False)
@@ -755,7 +879,38 @@ def upgrade() -> None:
         ["tracking_deivce_id"],
         unique=False,
     )
+    op.create_index(
+        op.f("ix_trips_tracking_ended_at"), "trips", ["tracking_ended_at"], unique=False
+    )
+    op.create_index(
+        op.f("ix_trips_tracking_started_at"),
+        "trips",
+        ["tracking_started_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_trips_trek_end_latitude"), "trips", ["trek_end_latitude"], unique=False
+    )
+    op.create_index(
+        op.f("ix_trips_trek_end_longitude"),
+        "trips",
+        ["trek_end_longitude"],
+        unique=False,
+    )
     op.create_index(op.f("ix_trips_trek_id"), "trips", ["trek_id"], unique=False)
+    op.create_index(
+        op.f("ix_trips_trek_start_latitude"),
+        "trips",
+        ["trek_start_latitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_trips_trek_start_longitude"),
+        "trips",
+        ["trek_start_longitude"],
+        unique=False,
+    )
+    op.create_index(op.f("ix_trips_trip_type"), "trips", ["trip_type"], unique=False)
     op.create_index(op.f("ix_trips_user_id"), "trips", ["user_id"], unique=False)
     op.create_table(
         "alerts",
@@ -790,7 +945,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    # Use IF NOT EXISTS to prevent duplicate index error
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_alerts_location ON alerts USING gist (location)"
     )
@@ -805,6 +959,7 @@ def upgrade() -> None:
         "location_history",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("trip_id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("timestamp", sa.Integer(), nullable=False),
         sa.Column(
             "location",
@@ -817,18 +972,67 @@ def upgrade() -> None:
             ),
             nullable=True,
         ),
+        sa.Column("latitude", sa.Float(), nullable=False),
+        sa.Column("longitude", sa.Float(), nullable=False),
+        sa.Column("altitude", sa.Float(), nullable=True),
+        sa.Column("accuracy", sa.Float(), nullable=True),
+        sa.Column("speed", sa.Float(), nullable=True),
+        sa.Column("bearing", sa.Float(), nullable=True),
+        sa.Column(
+            "source",
+            sa.Enum(
+                "MOBILE_GPS", "TRACKING_DEVICE", "MANUAL", name="locationsourceenum"
+            ),
+            nullable=False,
+        ),
+        sa.Column("trip_phase", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("device_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("battery_level", sa.Integer(), nullable=True),
+        sa.Column("signal_strength", sa.Integer(), nullable=True),
+        sa.Column("notes", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("is_waypoint", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(
             ["trip_id"],
             ["trips.id"],
         ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    # Use IF NOT EXISTS to prevent duplicate index error
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_location_history_location ON location_history USING gist (location)"
     )
     op.create_index(
+        op.f("ix_location_history_device_id"),
+        "location_history",
+        ["device_id"],
+        unique=False,
+    )
+    op.create_index(
         op.f("ix_location_history_id"), "location_history", ["id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_location_history_is_waypoint"),
+        "location_history",
+        ["is_waypoint"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_location_history_latitude"),
+        "location_history",
+        ["latitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_location_history_longitude"),
+        "location_history",
+        ["longitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_location_history_source"), "location_history", ["source"], unique=False
     )
     op.create_index(
         op.f("ix_location_history_timestamp"),
@@ -842,16 +1046,140 @@ def upgrade() -> None:
         ["trip_id"],
         unique=False,
     )
+    op.create_index(
+        op.f("ix_location_history_trip_phase"),
+        "location_history",
+        ["trip_phase"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_location_history_user_id"),
+        "location_history",
+        ["user_id"],
+        unique=False,
+    )
+    op.create_table(
+        "route_segments",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("trip_id", sa.Integer(), nullable=False),
+        sa.Column("segment_type", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("start_timestamp", sa.Integer(), nullable=False),
+        sa.Column("end_timestamp", sa.Integer(), nullable=True),
+        sa.Column("start_latitude", sa.Float(), nullable=False),
+        sa.Column("start_longitude", sa.Float(), nullable=False),
+        sa.Column("end_latitude", sa.Float(), nullable=True),
+        sa.Column("end_longitude", sa.Float(), nullable=True),
+        sa.Column("total_distance_meters", sa.Float(), nullable=True),
+        sa.Column("total_duration_seconds", sa.Integer(), nullable=True),
+        sa.Column("max_speed_ms", sa.Float(), nullable=True),
+        sa.Column("avg_speed_ms", sa.Float(), nullable=True),
+        sa.Column("trek_path_id", sa.Integer(), nullable=True),
+        sa.Column("is_completed", sa.Boolean(), nullable=False),
+        sa.Column("notes", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["trek_path_id"],
+            ["trek_paths.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["trip_id"],
+            ["trips.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_route_segments_end_latitude"),
+        "route_segments",
+        ["end_latitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_end_longitude"),
+        "route_segments",
+        ["end_longitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_end_timestamp"),
+        "route_segments",
+        ["end_timestamp"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_id"), "route_segments", ["id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_route_segments_is_completed"),
+        "route_segments",
+        ["is_completed"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_segment_type"),
+        "route_segments",
+        ["segment_type"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_start_latitude"),
+        "route_segments",
+        ["start_latitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_start_longitude"),
+        "route_segments",
+        ["start_longitude"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_start_timestamp"),
+        "route_segments",
+        ["start_timestamp"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_trek_path_id"),
+        "route_segments",
+        ["trek_path_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_route_segments_trip_id"), "route_segments", ["trip_id"], unique=False
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f("ix_route_segments_trip_id"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_trek_path_id"), table_name="route_segments")
+    op.drop_index(
+        op.f("ix_route_segments_start_timestamp"), table_name="route_segments"
+    )
+    op.drop_index(
+        op.f("ix_route_segments_start_longitude"), table_name="route_segments"
+    )
+    op.drop_index(op.f("ix_route_segments_start_latitude"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_segment_type"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_is_completed"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_id"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_end_timestamp"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_end_longitude"), table_name="route_segments")
+    op.drop_index(op.f("ix_route_segments_end_latitude"), table_name="route_segments")
+    op.drop_table("route_segments")
+    op.drop_index(op.f("ix_location_history_user_id"), table_name="location_history")
+    op.drop_index(op.f("ix_location_history_trip_phase"), table_name="location_history")
     op.drop_index(op.f("ix_location_history_trip_id"), table_name="location_history")
     op.drop_index(op.f("ix_location_history_timestamp"), table_name="location_history")
+    op.drop_index(op.f("ix_location_history_source"), table_name="location_history")
+    op.drop_index(op.f("ix_location_history_longitude"), table_name="location_history")
+    op.drop_index(op.f("ix_location_history_latitude"), table_name="location_history")
+    op.drop_index(
+        op.f("ix_location_history_is_waypoint"), table_name="location_history"
+    )
     op.drop_index(op.f("ix_location_history_id"), table_name="location_history")
-    # Use IF EXISTS to prevent errors if index doesn't exist
+    op.drop_index(op.f("ix_location_history_device_id"), table_name="location_history")
     op.execute("DROP INDEX IF EXISTS idx_location_history_location")
     op.drop_table("location_history")
     op.drop_index(op.f("ix_alerts_trip_id"), table_name="alerts")
@@ -859,18 +1187,32 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_alerts_status"), table_name="alerts")
     op.drop_index(op.f("ix_alerts_id"), table_name="alerts")
     op.drop_index(op.f("ix_alerts_alert_type"), table_name="alerts")
-    # Use IF EXISTS to prevent errors if index doesn't exist
     op.execute("DROP INDEX IF EXISTS idx_alerts_location")
     op.drop_table("alerts")
     op.drop_index(op.f("ix_trips_user_id"), table_name="trips")
+    op.drop_index(op.f("ix_trips_trip_type"), table_name="trips")
+    op.drop_index(op.f("ix_trips_trek_start_longitude"), table_name="trips")
+    op.drop_index(op.f("ix_trips_trek_start_latitude"), table_name="trips")
     op.drop_index(op.f("ix_trips_trek_id"), table_name="trips")
+    op.drop_index(op.f("ix_trips_trek_end_longitude"), table_name="trips")
+    op.drop_index(op.f("ix_trips_trek_end_latitude"), table_name="trips")
+    op.drop_index(op.f("ix_trips_tracking_started_at"), table_name="trips")
+    op.drop_index(op.f("ix_trips_tracking_ended_at"), table_name="trips")
     op.drop_index(op.f("ix_trips_tracking_deivce_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_status"), table_name="trips")
     op.drop_index(op.f("ix_trips_start_date"), table_name="trips")
+    op.drop_index(op.f("ix_trips_linked_device_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_itinerary_id"), table_name="trips")
+    op.drop_index(op.f("ix_trips_is_tracking_active"), table_name="trips")
     op.drop_index(op.f("ix_trips_id"), table_name="trips")
+    op.drop_index(op.f("ix_trips_hotel_longitude"), table_name="trips")
+    op.drop_index(op.f("ix_trips_hotel_latitude"), table_name="trips")
     op.drop_index(op.f("ix_trips_guide_id"), table_name="trips")
     op.drop_index(op.f("ix_trips_end_date"), table_name="trips")
+    op.drop_index(op.f("ix_trips_device_linked_at"), table_name="trips")
+    op.drop_index(op.f("ix_trips_destination_longitude"), table_name="trips")
+    op.drop_index(op.f("ix_trips_destination_latitude"), table_name="trips")
+    op.drop_index(op.f("ix_trips_current_phase"), table_name="trips")
     op.drop_table("trips")
     op.drop_index(op.f("ix_itinerary_days_updated_at"), table_name="itinerary_days")
     op.drop_index(op.f("ix_itinerary_days_trek_id"), table_name="itinerary_days")
@@ -887,9 +1229,19 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_trek_route_data_updated_at"), table_name="trek_route_data")
     op.drop_index(op.f("ix_trek_route_data_trek_id"), table_name="trek_route_data")
     op.drop_index(op.f("ix_trek_route_data_created_at"), table_name="trek_route_data")
-    # Use IF EXISTS to prevent errors if index doesn't exist
     op.execute("DROP INDEX IF EXISTS idx_trek_route_data_route")
     op.drop_table("trek_route_data")
+    op.drop_index(op.f("ix_trek_paths_trek_id"), table_name="trek_paths")
+    op.drop_index(op.f("ix_trek_paths_total_distance_meters"), table_name="trek_paths")
+    op.drop_index(op.f("ix_trek_paths_name"), table_name="trek_paths")
+    op.drop_index(op.f("ix_trek_paths_is_active"), table_name="trek_paths")
+    op.drop_index(op.f("ix_trek_paths_id"), table_name="trek_paths")
+    op.drop_index(
+        op.f("ix_trek_paths_estimated_duration_hours"), table_name="trek_paths"
+    )
+    op.drop_index(op.f("ix_trek_paths_created_at"), table_name="trek_paths")
+    op.execute("DROP INDEX IF EXISTS idx_trek_paths_path_coordinates")
+    op.drop_table("trek_paths")
     op.drop_index(op.f("ix_tracking_devices_updated_at"), table_name="tracking_devices")
     op.drop_index(op.f("ix_tracking_devices_treck_id"), table_name="tracking_devices")
     op.drop_index(op.f("ix_tracking_devices_status"), table_name="tracking_devices")
@@ -921,6 +1273,8 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_guide_treks_assigned_at"), table_name="guide_treks")
     op.drop_table("guide_treks")
     op.drop_index(op.f("ix_treks_state"), table_name="treks")
+    op.drop_index(op.f("ix_treks_start_longitude"), table_name="treks")
+    op.drop_index(op.f("ix_treks_start_latitude"), table_name="treks")
     op.drop_index(op.f("ix_treks_nearest_town"), table_name="treks")
     op.drop_index(op.f("ix_treks_name"), table_name="treks")
     op.drop_index(op.f("ix_treks_minimum_people"), table_name="treks")
