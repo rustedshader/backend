@@ -12,21 +12,18 @@ from app.models.database.trips import (
     TripTypeEnum,
     TrekPhaseEnum,
     TourPhaseEnum,
-    TripStatusEnum,
 )
 from app.models.database.treks import Trek
+from app.models.database.user import User
+from app.models.database.itinerary import ItineraryDay
+from app.models.database.places import Place
 from app.models.schemas.trip_tracking import (
     LocationBatch,
     LiveLocationUpdate,
     TripTrackingStats,
-    StartDayRequest,
-    StartTrekRequest,
-    EndTrekRequest,
-    DeviceLinkRequest,
 )
 import datetime
 from geoalchemy2.functions import ST_MakePoint
-import json
 
 
 class TripTrackingService:
@@ -71,6 +68,95 @@ class TripTrackingService:
                 if trek:
                     trip.trek_start_latitude = trek.start_latitude
                     trip.trek_start_longitude = trek.start_longitude
+
+        self.db.add(trip)
+        self.db.commit()
+        return True
+
+    async def start_trip_tracking_from_itinerary(self, trip_id: int) -> bool:
+        """Start tracking for a trip using data from the linked itinerary."""
+        trip = self.db.exec(select(Trips).where(Trips.id == trip_id)).first()
+        if not trip or not trip.itinerary_id:
+            return False
+
+        # Get today's itinerary day
+        today = datetime.date.today()
+        itinerary_day = self.db.exec(
+            select(ItineraryDay)
+            .where(ItineraryDay.itinerary_id == trip.itinerary_id)
+            .where(ItineraryDay.date == today)
+        ).first()
+
+        if not itinerary_day:
+            # If no specific day found, try to get the first day of the itinerary
+            itinerary_day = self.db.exec(
+                select(ItineraryDay)
+                .where(ItineraryDay.itinerary_id == trip.itinerary_id)
+                .order_by(ItineraryDay.day_number)
+            ).first()
+
+        if not itinerary_day:
+            return False
+
+        # Determine trip type from itinerary day type
+        if itinerary_day.day_type == "trek_day":
+            trip_type = TripTypeEnum.TREK_DAY
+        else:
+            trip_type = TripTypeEnum.TOUR_DAY
+
+        # Get hotel coordinates from accommodation
+        hotel_lat = itinerary_day.accommodation_latitude
+        hotel_lon = itinerary_day.accommodation_longitude
+        hotel_name = itinerary_day.accommodation_name
+
+        if not hotel_lat or not hotel_lon:
+            return False
+
+        # Get destination coordinates
+        destination_lat = None
+        destination_lon = None
+        destination_name = None
+
+        if trip_type == TripTypeEnum.TREK_DAY and itinerary_day.trek_id:
+            # Get trek start coordinates as destination
+            trek = self.db.exec(
+                select(Trek).where(Trek.id == itinerary_day.trek_id)
+            ).first()
+            if trek:
+                destination_lat = trek.start_latitude
+                destination_lon = trek.start_longitude
+                destination_name = f"Trek Start: {trek.name}"
+                trip.trek_id = trek.id
+        elif trip_type == TripTypeEnum.TOUR_DAY and itinerary_day.primary_place_id:
+            # Get place coordinates as destination
+            place = self.db.exec(
+                select(Place).where(Place.id == itinerary_day.primary_place_id)
+            ).first()
+            if place:
+                destination_lat = place.latitude
+                destination_lon = place.longitude
+                destination_name = place.name
+
+        # Update trip with tracking information
+        trip.trip_type = trip_type
+        trip.hotel_latitude = hotel_lat
+        trip.hotel_longitude = hotel_lon
+        trip.hotel_name = hotel_name
+        trip.destination_latitude = destination_lat
+        trip.destination_longitude = destination_lon
+        trip.destination_name = destination_name
+        trip.is_tracking_active = True
+        trip.tracking_started_at = datetime.datetime.utcnow()
+
+        # Set initial phase
+        if trip_type == TripTypeEnum.TREK_DAY:
+            trip.current_phase = TrekPhaseEnum.TO_TREK_START
+            # Set trek start coordinates
+            if destination_lat and destination_lon:
+                trip.trek_start_latitude = destination_lat
+                trip.trek_start_longitude = destination_lon
+        else:
+            trip.current_phase = TourPhaseEnum.TO_DESTINATION
 
         self.db.add(trip)
         self.db.commit()
@@ -307,33 +393,6 @@ class TripTrackingService:
         ).first()
 
         return trek_path
-
-    async def create_trek_path(
-        self,
-        trek_id: int,
-        name: str,
-        path_coordinates: List[List[float]],
-        distance_meters: float,
-        duration_hours: float,
-        description: Optional[str] = None,
-        elevation_gain: Optional[float] = None,
-        waypoints: Optional[List[Dict]] = None,
-    ) -> Optional[int]:
-        """Create a new trek path."""
-        trek_path = TrekPath(
-            trek_id=trek_id,
-            name=name,
-            description=description,
-            total_distance_meters=distance_meters,
-            estimated_duration_hours=duration_hours,
-            elevation_gain_meters=elevation_gain,
-            waypoints=json.dumps(waypoints) if waypoints else None,
-        )
-
-        self.db.add(trek_path)
-        self.db.commit()
-        self.db.refresh(trek_path)
-        return trek_path.id
 
     # ================== BUTTON-DRIVEN WORKFLOW METHODS ==================
 
@@ -588,3 +647,222 @@ class TripTrackingService:
             },
             "instructions": "Day completed! Thank you for using our tracking service.",
         }
+
+    # ================== ADMIN MONITORING METHODS ==================
+
+    async def get_all_active_tourists_locations(self) -> List[Dict[str, any]]:
+        """Get locations of all tourists on active trips for admin monitoring."""
+        try:
+            # Get all active trips
+            active_trips_statement = (
+                select(Trips)
+                .where(Trips.status.in_(["started", "visiting", "returning"]))
+                .where(Trips.is_tracking_active)
+            )
+
+            active_trips = self.db.exec(active_trips_statement).all()
+
+            active_tourists = []
+
+            for trip in active_trips:
+                # Get the most recent location for this trip
+                latest_location_statement = (
+                    select(LocationHistory)
+                    .where(LocationHistory.trip_id == trip.id)
+                    .order_by(LocationHistory.timestamp.desc())
+                    .limit(1)
+                )
+
+                latest_location = self.db.exec(latest_location_statement).first()
+
+                # Get user information
+                user_statement = select(User).where(User.id == trip.user_id)
+                user = self.db.exec(user_statement).first()
+
+                tourist_data = {
+                    "trip_id": trip.id,
+                    "user_id": trip.user_id,
+                    "user_name": f"{user.first_name} {user.last_name}"
+                    if user
+                    else "Unknown",
+                    "user_phone": user.phone_number if user else None,
+                    "trip_type": trip.trip_type,
+                    "status": trip.status,
+                    "current_phase": trip.current_phase,
+                    "is_tracking_active": trip.is_tracking_active,
+                    "tracking_started_at": trip.tracking_started_at.isoformat()
+                    if trip.tracking_started_at
+                    else None,
+                    "hotel_info": {
+                        "name": trip.hotel_name,
+                        "latitude": trip.hotel_latitude,
+                        "longitude": trip.hotel_longitude,
+                    }
+                    if trip.hotel_name
+                    else None,
+                    "destination_info": {
+                        "name": trip.destination_name,
+                        "latitude": trip.destination_latitude,
+                        "longitude": trip.destination_longitude,
+                    }
+                    if trip.destination_name
+                    else None,
+                    "linked_device_id": trip.linked_device_id,
+                    "last_location": None,
+                }
+
+                if latest_location:
+                    tourist_data["last_location"] = {
+                        "latitude": latest_location.latitude,
+                        "longitude": latest_location.longitude,
+                        "altitude": latest_location.altitude,
+                        "accuracy": latest_location.accuracy,
+                        "speed": latest_location.speed,
+                        "bearing": latest_location.bearing,
+                        "timestamp": latest_location.timestamp,
+                        "source": latest_location.source,
+                        "trip_phase": latest_location.trip_phase,
+                        "is_waypoint": latest_location.is_waypoint,
+                        "battery_level": latest_location.battery_level,
+                        "signal_strength": latest_location.signal_strength,
+                        "time_ago_minutes": (
+                            datetime.datetime.utcnow().timestamp()
+                            - latest_location.timestamp
+                        )
+                        / 60,
+                    }
+
+                active_tourists.append(tourist_data)
+
+            return active_tourists
+
+        except Exception as e:
+            print(f"Error getting active tourists locations: {e}")
+            return []
+
+    async def get_trip_live_location(self, trip_id: int) -> Optional[Dict[str, any]]:
+        """Get live location for a specific trip for admin monitoring."""
+        try:
+            # Get trip information
+            trip_statement = select(Trips).where(Trips.id == trip_id)
+            trip = self.db.exec(trip_statement).first()
+
+            if not trip:
+                return None
+
+            # Get user information
+            user_statement = select(User).where(User.id == trip.user_id)
+            user = self.db.exec(user_statement).first()
+
+            # Get recent location history (last 10 locations)
+            recent_locations_statement = (
+                select(LocationHistory)
+                .where(LocationHistory.trip_id == trip_id)
+                .order_by(LocationHistory.timestamp.desc())
+                .limit(10)
+            )
+
+            recent_locations = self.db.exec(recent_locations_statement).all()
+
+            # Get trip statistics
+            stats = await self.get_trip_tracking_stats(trip_id)
+
+            live_data = {
+                "trip_id": trip.id,
+                "user_id": trip.user_id,
+                "user_info": {
+                    "name": f"{user.first_name} {user.last_name}"
+                    if user
+                    else "Unknown",
+                    "phone": user.phone_number if user else None,
+                    "email": user.email if user else None,
+                },
+                "trip_details": {
+                    "type": trip.trip_type,
+                    "status": trip.status,
+                    "current_phase": trip.current_phase,
+                    "is_tracking_active": trip.is_tracking_active,
+                    "tracking_started_at": trip.tracking_started_at.isoformat()
+                    if trip.tracking_started_at
+                    else None,
+                    "tracking_ended_at": trip.tracking_ended_at.isoformat()
+                    if trip.tracking_ended_at
+                    else None,
+                },
+                "locations": {
+                    "hotel": {
+                        "name": trip.hotel_name,
+                        "latitude": trip.hotel_latitude,
+                        "longitude": trip.hotel_longitude,
+                    }
+                    if trip.hotel_name
+                    else None,
+                    "destination": {
+                        "name": trip.destination_name,
+                        "latitude": trip.destination_latitude,
+                        "longitude": trip.destination_longitude,
+                    }
+                    if trip.destination_name
+                    else None,
+                    "trek_start": {
+                        "latitude": trip.trek_start_latitude,
+                        "longitude": trip.trek_start_longitude,
+                    }
+                    if trip.trek_start_latitude
+                    else None,
+                    "trek_end": {
+                        "latitude": trip.trek_end_latitude,
+                        "longitude": trip.trek_end_longitude,
+                    }
+                    if trip.trek_end_latitude
+                    else None,
+                },
+                "linked_device": {
+                    "device_id": trip.linked_device_id,
+                    "linked_at": trip.device_linked_at.isoformat()
+                    if trip.device_linked_at
+                    else None,
+                }
+                if trip.linked_device_id
+                else None,
+                "recent_locations": [],
+                "statistics": {
+                    "total_distance_meters": stats.total_distance_meters
+                    if stats
+                    else 0,
+                    "total_duration_seconds": stats.total_duration_seconds
+                    if stats
+                    else 0,
+                    "locations_recorded": stats.locations_recorded if stats else 0,
+                    "avg_speed_ms": stats.avg_speed_ms if stats else 0,
+                    "max_speed_ms": stats.max_speed_ms if stats else 0,
+                },
+            }
+
+            # Add recent location data
+            for location in recent_locations:
+                location_data = {
+                    "latitude": location.latitude,
+                    "longitude": location.longitude,
+                    "altitude": location.altitude,
+                    "accuracy": location.accuracy,
+                    "speed": location.speed,
+                    "bearing": location.bearing,
+                    "timestamp": location.timestamp,
+                    "source": location.source,
+                    "trip_phase": location.trip_phase,
+                    "is_waypoint": location.is_waypoint,
+                    "battery_level": location.battery_level,
+                    "signal_strength": location.signal_strength,
+                    "time_ago_minutes": (
+                        datetime.datetime.utcnow().timestamp() - location.timestamp
+                    )
+                    / 60,
+                }
+                live_data["recent_locations"].append(location_data)
+
+            return live_data
+
+        except Exception as e:
+            print(f"Error getting trip live location: {e}")
+            return None

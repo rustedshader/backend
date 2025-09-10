@@ -188,3 +188,42 @@ class TripRouteResponse(BaseModel):
     total_stats: TripTrackingStats
     trek_path: Optional[TrekPathData] = None
     location_history: List[LocationPoint]
+
+
+class ActiveTouristResponse(BaseModel):
+    """Response model for active tourist location data."""
+
+    trip_id: int
+    user_id: int
+    user_name: str
+    user_phone: Optional[str] = None
+    trip_type: str
+    status: str
+    current_phase: Optional[str] = None
+    is_tracking_active: bool
+    tracking_started_at: Optional[str] = None
+    hotel_info: Optional[dict] = None
+    destination_info: Optional[dict] = None
+    linked_device_id: Optional[str] = None
+    last_location: Optional[dict] = None
+
+
+class AllActiveTouristsResponse(BaseModel):
+    """Response model for all active tourists."""
+
+    message: str
+    total_active_tourists: int
+    tourists: List[ActiveTouristResponse]
+
+
+class TripLiveLocationResponse(BaseModel):
+    """Response model for trip live location data."""
+
+    trip_id: int
+    user_id: int
+    user_info: dict
+    trip_details: dict
+    locations: dict
+    linked_device: Optional[dict] = None
+    recent_locations: List[dict]
+    statistics: dict

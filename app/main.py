@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.trek import router as trek_router
 from app.api.v1.routes.trips import router as trips_router
+from app.api.v1.routes.trip_tracking import router as trip_tracking_router
 from app.api.v1.routes.tracking_deivce import router as tracking_device_router
 from app.api.v1.routes.guide import router as guide_router
 from app.api.v1.routes.tourist_id import router as tourist_id_router
@@ -36,6 +37,7 @@ app.include_router(router=auth_router)
 app.include_router(router=guide_router)
 app.include_router(router=itinerary_router)
 app.include_router(router=trips_router)
+app.include_router(router=trip_tracking_router)
 app.include_router(router=trek_router)
 app.include_router(router=tracking_device_router)
 app.include_router(router=tourist_id_router)

@@ -22,6 +22,116 @@ from app.services.auth import issue_blockchain_id_at_entry_point
 router = APIRouter(prefix="/users", tags=["user-management"])
 
 
+# IMPORTANT: Specific string routes MUST come before parameterized routes
+# to avoid route conflicts with FastAPI path parameter matching
+
+
+@router.get("/admin/stats", response_model=UserStatsResponse)
+async def get_user_statistics(
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get comprehensive user statistics (Admin only).
+
+    Returns statistical information about users including:
+    - Total user count
+    - Breakdown by role
+    - Verification statistics
+    - Active/inactive users
+    - Blockchain ID issuance count
+    """
+    return await UserService.get_user_stats(db)
+
+
+@router.get("/admin/unverified", response_model=UserListResponse)
+async def get_unverified_users(
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get list of unverified users (Admin only).
+
+    Convenience endpoint to quickly access users who need KYC verification.
+    """
+    users = await UserService.get_all_users(
+        db=db,
+        is_verified_filter=False,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Get total unverified count
+    all_unverified = await UserService.get_all_users(
+        db=db,
+        is_verified_filter=False,
+        limit=10000,
+        offset=0,
+    )
+
+    return UserListResponse(
+        users=users,
+        total_count=len(all_unverified),
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get("/admin/no-blockchain-id", response_model=UserListResponse)
+async def get_users_without_blockchain_id(
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get list of verified users who don't have blockchain IDs yet (Admin only).
+
+    Useful for administrators to see which verified users are ready for
+    blockchain ID issuance.
+    """
+    from sqlmodel import select
+
+    try:
+        # Get verified users without blockchain IDs
+        statement = (
+            select(User)
+            .where(User.is_kyc_verified)
+            .where(User.tourist_id_token.is_(None))
+            .offset(offset)
+            .limit(limit)
+            .order_by(User.id.desc())
+        )
+
+        users_without_blockchain = db.exec(statement).all()
+        user_responses = [
+            UserResponse.model_validate(user) for user in users_without_blockchain
+        ]
+
+        # Get total count
+        count_statement = (
+            select(User)
+            .where(User.is_kyc_verified)
+            .where(User.tourist_id_token.is_(None))
+        )
+        total_users = len(db.exec(count_statement).all())
+
+        return UserListResponse(
+            users=user_responses,
+            total_count=total_users,
+            offset=offset,
+            limit=limit,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve users without blockchain ID: {str(e)}",
+        )
+
+
 @router.get("/admin", response_model=UserListResponse)
 async def list_all_users(
     role_filter: Optional[UserRoleEnum] = Query(
@@ -190,24 +300,6 @@ async def issue_user_blockchain_id(
         )
 
 
-@router.get("/admin/stats", response_model=UserStatsResponse)
-async def get_user_statistics(
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Get comprehensive user statistics (Admin only).
-
-    Returns statistical information about users including:
-    - Total user count
-    - Breakdown by role
-    - Verification statistics
-    - Active/inactive users
-    - Blockchain ID issuance count
-    """
-    return await UserService.get_user_stats(db)
-
-
 @router.put("/admin/{user_id}/status", response_model=UserResponse)
 async def update_user_status(
     user_id: int,
@@ -224,92 +316,3 @@ async def update_user_status(
     return await UserService.update_user_status(
         db, user_id, status_update.is_active, admin_user.id
     )
-
-
-# Additional convenience endpoints
-@router.get("/admin/unverified", response_model=UserListResponse)
-async def get_unverified_users(
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
-    offset: int = Query(0, ge=0, description="Number of results to skip"),
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Get list of unverified users (Admin only).
-
-    Convenience endpoint to quickly access users who need KYC verification.
-    """
-    users = await UserService.get_all_users(
-        db=db,
-        is_verified_filter=False,
-        limit=limit,
-        offset=offset,
-    )
-
-    # Get total unverified count
-    all_unverified = await UserService.get_all_users(
-        db=db,
-        is_verified_filter=False,
-        limit=10000,
-        offset=0,
-    )
-
-    return UserListResponse(
-        users=users,
-        total_count=len(all_unverified),
-        offset=offset,
-        limit=limit,
-    )
-
-
-@router.get("/admin/no-blockchain-id", response_model=UserListResponse)
-async def get_users_without_blockchain_id(
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
-    offset: int = Query(0, ge=0, description="Number of results to skip"),
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Get list of verified users who don't have blockchain IDs yet (Admin only).
-
-    Useful for administrators to see which verified users are ready for
-    blockchain ID issuance.
-    """
-    from sqlmodel import select
-
-    try:
-        # Get verified users without blockchain IDs
-        statement = (
-            select(User)
-            .where(User.is_kyc_verified)
-            .where(User.tourist_id_token.is_(None))
-            .offset(offset)
-            .limit(limit)
-            .order_by(User.id.desc())
-        )
-
-        users_without_blockchain = db.exec(statement).all()
-        user_responses = [
-            UserResponse.model_validate(user) for user in users_without_blockchain
-        ]
-
-        # Get total count
-        count_statement = (
-            select(User)
-            .where(User.is_kyc_verified)
-            .where(User.tourist_id_token.is_(None))
-        )
-        total_users = len(db.exec(count_statement).all())
-
-        return UserListResponse(
-            users=user_responses,
-            total_count=total_users,
-            offset=offset,
-            limit=limit,
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve users without blockchain ID: {str(e)}",
-        )

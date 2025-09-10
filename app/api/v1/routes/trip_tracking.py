@@ -4,15 +4,16 @@ API endpoints for trip tracking and GPS data management.
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session
-from typing import List, Optional
-from app.api.deps import get_current_user, get_session
+from typing import Optional
+from app.api.deps import get_current_user, get_db
 from app.models.database.user import User
 from app.models.schemas.trip_tracking import (
     LocationBatch,
     LiveLocationUpdate,
     TripTrackingStats,
-    TripTypeEnum,
     TrekPhaseEnum,
+    AllActiveTouristsResponse,
+    TripLiveLocationResponse,
 )
 from app.services.trip_tracking import TripTrackingService
 
@@ -22,32 +23,18 @@ router = APIRouter(prefix="/tracking", tags=["Trip Tracking"])
 @router.post("/start/{trip_id}")
 async def start_trip_tracking(
     trip_id: int,
-    trip_type: TripTypeEnum,
-    hotel_lat: float,
-    hotel_lon: float,
-    hotel_name: str,
-    destination_lat: Optional[float] = None,
-    destination_lon: Optional[float] = None,
-    destination_name: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
-    """Start GPS tracking for a trip."""
+    """Start GPS tracking for a trip using data from the linked itinerary."""
     service = TripTrackingService(db)
 
-    success = await service.start_trip_tracking(
-        trip_id=trip_id,
-        trip_type=trip_type,
-        hotel_lat=hotel_lat,
-        hotel_lon=hotel_lon,
-        hotel_name=hotel_name,
-        destination_lat=destination_lat,
-        destination_lon=destination_lon,
-        destination_name=destination_name,
-    )
+    success = await service.start_trip_tracking_from_itinerary(trip_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise HTTPException(
+            status_code=404, detail="Trip not found or itinerary data incomplete"
+        )
 
     return {"message": "Trip tracking started", "trip_id": trip_id}
 
@@ -57,7 +44,7 @@ async def upload_location_batch(
     location_batch: LocationBatch,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Upload a batch of location points."""
     service = TripTrackingService(db)
@@ -80,7 +67,7 @@ async def upload_location_batch(
 async def update_live_location(
     live_update: LiveLocationUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Update live location for real-time tracking."""
     service = TripTrackingService(db)
@@ -101,7 +88,7 @@ async def update_trip_phase(
     trip_id: int,
     new_phase: TrekPhaseEnum,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Update the current phase of a trek trip."""
     service = TripTrackingService(db)
@@ -125,7 +112,7 @@ async def start_route_segment(
     start_lon: float,
     trek_path_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Start a new route segment."""
     service = TripTrackingService(db)
@@ -154,7 +141,7 @@ async def complete_route_segment(
     end_lat: float,
     end_lon: float,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Complete a route segment with end coordinates."""
     service = TripTrackingService(db)
@@ -171,7 +158,7 @@ async def complete_route_segment(
 async def stop_trip_tracking(
     trip_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Stop GPS tracking for a trip."""
     service = TripTrackingService(db)
@@ -188,7 +175,7 @@ async def stop_trip_tracking(
 async def get_trip_stats(
     trip_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ) -> TripTrackingStats:
     """Get comprehensive tracking statistics for a trip."""
     service = TripTrackingService(db)
@@ -205,7 +192,7 @@ async def get_trip_stats(
 async def get_trek_path(
     trek_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     """Get the pre-made trek path for a trek."""
     service = TripTrackingService(db)
@@ -229,38 +216,45 @@ async def get_trek_path(
     }
 
 
-@router.post("/trek-path/{trek_id}")
-async def create_trek_path(
-    trek_id: int,
-    name: str,
-    path_coordinates: List[List[float]],
-    distance_meters: float,
-    duration_hours: float,
-    description: Optional[str] = None,
-    elevation_gain: Optional[float] = None,
-    waypoints: Optional[List[dict]] = None,
+@router.get("/admin/active-tourists")
+async def get_all_active_tourists(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session),
-):
-    """Create a new trek path."""
+    db: Session = Depends(get_db),
+) -> AllActiveTouristsResponse:
+    """Get locations of all tourists on active trips for monitoring."""
+    # Check if user has admin role
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     service = TripTrackingService(db)
 
-    path_id = await service.create_trek_path(
-        trek_id=trek_id,
-        name=name,
-        path_coordinates=path_coordinates,
-        distance_meters=distance_meters,
-        duration_hours=duration_hours,
-        description=description,
-        elevation_gain=elevation_gain,
-        waypoints=waypoints,
+    active_tourists = await service.get_all_active_tourists_locations()
+
+    return AllActiveTouristsResponse(
+        message="Active tourists retrieved successfully",
+        total_active_tourists=len(active_tourists),
+        tourists=active_tourists,
     )
 
-    if not path_id:
-        raise HTTPException(status_code=400, detail="Failed to create trek path")
 
-    return {
-        "message": "Trek path created successfully",
-        "path_id": path_id,
-        "trek_id": trek_id,
-    }
+@router.get("/admin/trip/{trip_id}/live-location")
+async def get_trip_live_location(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TripLiveLocationResponse:
+    """Get live location for a specific trip for monitoring."""
+    # Check if user has admin role
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    service = TripTrackingService(db)
+
+    live_location = await service.get_trip_live_location(trip_id)
+
+    if not live_location:
+        raise HTTPException(
+            status_code=404, detail="Trip not found or no recent location data"
+        )
+
+    return TripLiveLocationResponse(**live_location)
