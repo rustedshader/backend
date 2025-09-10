@@ -29,6 +29,7 @@ from app.models.database.itinerary import (
     TransportModeEnum,
 )
 from app.models.database.places import Place, PlaceTypeEnum
+from app.models.database.test_coordinates import TestCoordinates
 from app.core.config import settings
 from app.models.database.base import SQLModel
 
