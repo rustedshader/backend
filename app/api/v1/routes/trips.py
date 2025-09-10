@@ -17,8 +17,6 @@ from app.services.trips import (
     get_user_trips,
     get_trip_by_id,
     link_tracking_device_to_trip,
-    start_trip,
-    stop_trip,
     save_location_data,
     get_trip_locations,
 )
@@ -89,46 +87,6 @@ async def link_device_to_trip(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to link device to trip",
-        ) from e
-
-
-@router.post("/{trip_id}/start", response_model=TripResponse)
-async def start_trip_endpoint(
-    trip_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Start a trip - changes status to IN_PROGRESS."""
-    try:
-        trip = await start_trip(trip_id, current_user.id, db)
-        return trip
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to start trip",
-        ) from e
-
-
-@router.post("/{trip_id}/stop", response_model=TripResponse)
-async def stop_trip_endpoint(
-    trip_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Stop a trip - changes status to COMPLETED."""
-    try:
-        trip = await stop_trip(trip_id, current_user.id, db)
-        return trip
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to stop trip",
         ) from e
 
 

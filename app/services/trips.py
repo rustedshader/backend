@@ -65,61 +65,6 @@ async def link_tracking_device_to_trip(
         raise e
 
 
-async def start_trip(trip_id: int, user_id: int, db: Session) -> Trips:
-    """Start a trip by changing its status to IN_PROGRESS."""
-    try:
-        trip_statement = select(Trips).where(
-            Trips.id == trip_id, Trips.user_id == user_id
-        )
-        trip = db.exec(trip_statement).first()
-
-        if not trip:
-            raise ValueError("Trip not found or doesn't belong to user")
-
-        if trip.status != TripStatusEnum.ASSIGNED:
-            raise ValueError("Trip must be in ASSIGNED status to start")
-
-        if not trip.tracking_deivce_id:
-            raise ValueError("No tracking device linked to this trip")
-
-        trip.status = TripStatusEnum.IN_PROGRESS
-        db.add(trip)
-        db.commit()
-        db.refresh(trip)
-
-        return trip
-
-    except Exception as e:
-        db.rollback()
-        raise e
-
-
-async def stop_trip(trip_id: int, user_id: int, db: Session) -> Trips:
-    """Stop a trip by changing its status to COMPLETED."""
-    try:
-        trip_statement = select(Trips).where(
-            Trips.id == trip_id, Trips.user_id == user_id
-        )
-        trip = db.exec(trip_statement).first()
-
-        if not trip:
-            raise ValueError("Trip not found or doesn't belong to user")
-
-        if trip.status != TripStatusEnum.IN_PROGRESS:
-            raise ValueError("Trip must be in IN_PROGRESS status to stop")
-
-        trip.status = TripStatusEnum.COMPLETED
-        db.add(trip)
-        db.commit()
-        db.refresh(trip)
-
-        return trip
-
-    except Exception as e:
-        db.rollback()
-        raise e
-
-
 async def save_location_data(
     trip_id: int,
     latitude: float,
