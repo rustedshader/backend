@@ -5,7 +5,7 @@ from app.models.database.itinerary import (
     ItineraryStatusEnum,
     ItineraryTypeEnum,
 )
-from app.models.database.trips import Trips, TripStatusEnum
+from app.models.database.trips import Trips, TripStatusEnum, TripTypeEnum
 from app.models.database.places import Place
 from app.models.database.treks import Trek
 from app.models.schemas.itinerary import ItineraryCreate, ItineraryUpdate
@@ -103,20 +103,66 @@ async def create_itinerary(
 
         db.commit()
 
-        # Automatically create a trip for this itinerary
-        trip = Trips(
-            user_id=user_id,
-            itinerary_id=itinerary.id,
-            # Use trek_id if it's a trek-based itinerary
-            trek_id=itinerary.trek_id if itinerary.trek_id else None,
-            start_date=itinerary.start_date,
-            end_date=itinerary.end_date,
-            status=TripStatusEnum.ASSIGNED,
-        )
+        # Auto-create a trip for this itinerary with rich data
+        try:
+            # Extract accommodation and destination info from first day if available
+            hotel_name = None
+            hotel_latitude = None
+            hotel_longitude = None
+            destination_name = (
+                f"{itinerary_data.destination_city}, {itinerary_data.destination_state}"
+            )
+            destination_latitude = None
+            destination_longitude = None
 
-        db.add(trip)
-        db.commit()
-        db.refresh(trip)
+            # Get accommodation details from the first itinerary day
+            if itinerary_data.itinerary_days and len(itinerary_data.itinerary_days) > 0:
+                first_day = itinerary_data.itinerary_days[0]
+                hotel_name = first_day.accommodation_name
+                hotel_latitude = first_day.accommodation_latitude
+                hotel_longitude = first_day.accommodation_longitude
+
+            # Try to get primary place coordinates for destination
+            if itinerary_data.primary_place_id:
+                primary_place = db.exec(
+                    select(Place).where(Place.id == itinerary_data.primary_place_id)
+                ).first()
+                if primary_place:
+                    destination_latitude = primary_place.latitude
+                    destination_longitude = primary_place.longitude
+                    destination_name = (
+                        f"{primary_place.name}, {itinerary_data.destination_city}"
+                    )
+
+            new_trip = Trips(
+                user_id=user_id,
+                itinerary_id=itinerary.id,
+                trek_id=itinerary_data.trek_id,
+                start_date=itinerary_data.start_date,
+                end_date=itinerary_data.end_date,
+                status=TripStatusEnum.ASSIGNED,
+                trip_type=TripTypeEnum.TOUR_DAY,
+                # Populate accommodation details
+                hotel_name=hotel_name,
+                hotel_latitude=hotel_latitude,
+                hotel_longitude=hotel_longitude,
+                # Populate destination details
+                destination_name=destination_name,
+                destination_latitude=destination_latitude,
+                destination_longitude=destination_longitude,
+                # Set current phase for tour
+                current_phase="tour_planning",
+            )
+            db.add(new_trip)
+            db.commit()
+            db.refresh(new_trip)
+            print(
+                f"✅ Successfully created trip ID: {new_trip.id} for itinerary ID: {itinerary.id} with accommodation: {hotel_name} and destination: {destination_name}"
+            )
+        except Exception as e:
+            print(f"❌ Error creating trip: {str(e)}")
+            db.rollback()
+            # Continue anyway since itinerary creation was successful
 
         return itinerary
 
