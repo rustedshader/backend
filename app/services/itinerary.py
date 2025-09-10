@@ -261,3 +261,69 @@ async def delete_itinerary(itinerary_id: int, user_id: int, db: Session) -> bool
     except Exception as e:
         db.rollback()
         raise e
+
+
+async def get_itinerary_for_blockchain(itinerary_id: int, db: Session) -> str:
+    """
+    Get itinerary data in a format suitable for blockchain storage.
+    Returns a JSON string representation of the itinerary for hashing.
+    """
+    try:
+        # Get the itinerary
+        itinerary = db.exec(
+            select(Itinerary).where(Itinerary.id == itinerary_id)
+        ).first()
+        if not itinerary:
+            raise ValueError(f"Itinerary with ID {itinerary_id} not found")
+
+        # Get all itinerary days
+        itinerary_days = db.exec(
+            select(ItineraryDay)
+            .where(ItineraryDay.itinerary_id == itinerary_id)
+            .order_by(ItineraryDay.day_number)
+        ).all()
+
+        # Create a blockchain-suitable representation
+        blockchain_data = {
+            "itinerary_id": itinerary.id,
+            "user_id": itinerary.user_id,
+            "title": itinerary.title,
+            "destination_city": itinerary.destination_city,
+            "destination_state": itinerary.destination_state,
+            "destination_country": itinerary.destination_country,
+            "start_date": itinerary.start_date.isoformat(),
+            "end_date": itinerary.end_date.isoformat(),
+            "total_duration_days": itinerary.total_duration_days,
+            "itinerary_type": itinerary.itinerary_type,
+            "status": itinerary.status,
+            "number_of_travelers": itinerary.number_of_travelers,
+            "purpose_of_visit": itinerary.purpose_of_visit,
+            "primary_place_id": itinerary.primary_place_id,
+            "trek_id": itinerary.trek_id,
+            "days": [],
+        }
+
+        # Add day details
+        for day in itinerary_days:
+            day_data = {
+                "day_number": day.day_number,
+                "date": day.date.isoformat(),
+                "day_type": day.day_type,
+                "primary_place_id": day.primary_place_id,
+                "trek_id": day.trek_id,
+                "planned_activities": day.planned_activities,
+                "accommodation_name": day.accommodation_name,
+                "accommodation_type": day.accommodation_type,
+                "accommodation_address": day.accommodation_address,
+                "transport_mode": day.transport_mode,
+                "safety_notes": day.safety_notes,
+            }
+            blockchain_data["days"].append(day_data)
+
+        # Return as JSON string for blockchain hashing
+        import json
+
+        return json.dumps(blockchain_data, sort_keys=True)
+
+    except Exception as e:
+        raise e

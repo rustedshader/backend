@@ -187,6 +187,11 @@ async def issue_blockchain_id_at_entry_point(
 
     except Exception as e:
         db.rollback()
+        print(f"❌ Error in issue_blockchain_id_at_entry_point: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+
+        print(f"❌ Traceback: {traceback.format_exc()}")
         raise e
 
 

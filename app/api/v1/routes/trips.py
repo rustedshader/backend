@@ -44,9 +44,9 @@ async def get_all_trips(
 
 # User can get a specific trip by id
 @router.get("/{trip_id}", response_model=Trips)
-async def get_trip_from_id(trip_id: int):
+async def get_trip_from_id(trip_id: int, db: Session = Depends(get_db)):
     try:
-        trip = await get_trip_by_id(trip_id)
+        trip = await get_trip_by_id(trip_id, db)
         if not trip:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found"
