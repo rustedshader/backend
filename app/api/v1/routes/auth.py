@@ -82,12 +82,12 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(
-        data={"sub": user.email, "role": user.role.value}, expires_delta=3600
+        data={"sub": user.email, "role": user.role.value}, expires_delta=259200
     )
     refresh_token = create_refresh_token(
-        data={"sub": user.email, "role": user.role.value}, expires_delta=86400
+        data={"sub": user.email, "role": user.role.value}, expires_delta=259200
     )
-    await store_refresh_token(db, user.id, refresh_token, expires_delta=86400)
+    await store_refresh_token(db, user.id, refresh_token, expires_delta=259200)
 
     return {
         "access_token": access_token,
