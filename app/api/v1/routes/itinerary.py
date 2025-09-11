@@ -167,3 +167,60 @@ async def delete_itinerary(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete itinerary: {str(e)}",
         )
+
+
+@router.get("/user/{user_id}", response_model=List[ItineraryResponse])
+async def get_itineraries_by_user_id(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all itineraries for a specific user by user ID.
+
+    This endpoint allows getting itineraries for any user by their ID.
+    Access control: Users can only view their own itineraries unless they are admin.
+    """
+    try:
+        # Check if current user is trying to access their own itineraries or is admin
+        if current_user.id != user_id and current_user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only access your own itineraries",
+            )
+
+        # Check if the target user exists
+        from app.models.database.user import User as UserModel
+        from sqlmodel import select
+
+        user_statement = select(UserModel).where(UserModel.id == user_id)
+        target_user = db.exec(user_statement).first()
+
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
+        # Get itineraries for the specified user
+        itineraries = await itinerary_service.get_user_itineraries(
+            user_id=user_id, db=db
+        )
+
+        response_list = []
+        for itinerary in itineraries:
+            days = await itinerary_service.get_itinerary_days(itinerary.id, db)
+            day_responses = [ItineraryDayResponse.model_validate(day) for day in days]
+
+            itinerary_response = ItineraryResponse.model_validate(itinerary)
+            itinerary_response.itinerary_days = day_responses
+            response_list.append(itinerary_response)
+
+        return response_list
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch itineraries for user {user_id}: {str(e)}",
+        )
