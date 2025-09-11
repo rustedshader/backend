@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 from app.api.deps import get_current_user, get_db
 from app.models.database.user import User
-from app.models.schemas.routing_test import RoutingTestRequest, RoutingTestResponse
+from app.models.schemas.routing_test import RoutingTestRequest
 
 router = APIRouter(prefix="/routing-test", tags=["routing-test"])
 
 
-@router.post("/test-route-with-geofencing", response_model=RoutingTestResponse)
+@router.post("/test-route-with-geofencing")
 async def test_route_with_geofencing(
     request: RoutingTestRequest,
     current_user: User = Depends(get_current_user),
@@ -19,9 +19,7 @@ async def test_route_with_geofencing(
 ):
     """
     Test route generation with geofencing integration.
-
-    This endpoint allows testing the routing functionality with restricted areas
-    automatically included as block_areas in the GraphHopper request.
+    Returns a GeoJSON Feature with route geometry and properties.
 
     Example usage:
     POST /routing-test/test-route-with-geofencing
@@ -31,6 +29,22 @@ async def test_route_with_geofencing(
         "end_lat": 26.171218,
         "end_lon": 91.83634,
         "profile": "car"
+    }
+
+    Returns:
+    {
+        "type": "Feature",
+        "properties": {
+            "distance_meters": 5432.1,
+            "distance_km": 5.43,
+            "time_seconds": 1234,
+            "time_minutes": 20.6,
+            "profile": "car"
+        },
+        "geometry": {
+            "type": "LineString",
+            "coordinates": [[lon1, lat1], [lon2, lat2], ...]
+        }
     }
     """
     try:
@@ -55,58 +69,19 @@ async def test_route_with_geofencing(
         # Extract route summary for easier consumption
         summary = graphhopper_service.extract_route_summary(route_data)
 
-        # Get the list of blocked areas that were used
-        from app.services.geofencing import get_active_restricted_areas_for_routing
-
-        blocked_areas = await get_active_restricted_areas_for_routing(db)
-
         # Create GeoJSON Feature for the route
-        geojson = {
+        return {
             "type": "Feature",
             "properties": {
                 "distance_meters": summary.get("distance_meters", 0),
                 "distance_km": summary.get("distance_km", 0),
                 "time_seconds": summary.get("time_seconds", 0),
                 "time_minutes": summary.get("time_minutes", 0),
-                "time_hours": summary.get("time_hours", 0),
                 "profile": request.profile,
-                "blocked_areas_avoided": len(blocked_areas),
             },
             "geometry": summary.get(
                 "geometry", {"type": "LineString", "coordinates": []}
             ),
-        }
-
-        return {
-            "geojson": geojson,
-            "route_summary": summary,
-            "blocked_areas_count": len(blocked_areas),
-            "blocked_areas": blocked_areas[:3]
-            if blocked_areas
-            else [],  # Show first 3 for debugging
-            "request_details": {
-                "start": {
-                    "latitude": request.start_lat,
-                    "longitude": request.start_lon,
-                },
-                "end": {"latitude": request.end_lat, "longitude": request.end_lon},
-                "profile": request.profile,
-                "geofencing_enabled": True,
-            },
-            "debug_info": {
-                "graphhopper_request_payload": {
-                    "profile": request.profile,
-                    "points_encoded": False,
-                    "points": [
-                        [request.start_lon, request.start_lat],
-                        [request.end_lon, request.end_lat],
-                    ],
-                    "block_areas": blocked_areas[:3] if blocked_areas else [],
-                },
-                "total_blocked_areas": len(blocked_areas),
-                "route_found": bool(route_data),
-                "route_coordinates_count": len(summary.get("coordinates", [])),
-            },
         }
 
     except HTTPException:
