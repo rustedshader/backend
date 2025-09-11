@@ -271,3 +271,570 @@ async def test_route_simple(
                 "profile": request.profile,
             },
         }
+
+
+@router.post("/test-graphhopper-direct", include_in_schema=False)
+async def test_graphhopper_direct(
+    request: RoutingTestRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Test GraphHopper directly with and without block_areas to debug the issue.
+    """
+    try:
+        import aiohttp
+        from app.services.geofencing import get_active_restricted_areas_for_routing
+
+        # Get blocked areas
+        blocked_areas = await get_active_restricted_areas_for_routing(db)
+
+        base_url = "https://maps.rustedshader.com"
+
+        # Test 1: Route WITHOUT block_areas
+        payload_without_blocks = {
+            "profile": request.profile,
+            "points_encoded": False,
+            "points": [
+                [request.start_lon, request.start_lat],
+                [request.end_lon, request.end_lat],
+            ],
+        }
+
+        # Test 2: Route WITH block_areas
+        payload_with_blocks = {
+            "profile": request.profile,
+            "points_encoded": False,
+            "points": [
+                [request.start_lon, request.start_lat],
+                [request.end_lon, request.end_lat],
+            ],
+            "block_areas": blocked_areas,
+        }
+
+        results = {}
+
+        async with aiohttp.ClientSession() as session:
+            # Test without blocks
+            async with session.post(
+                f"{base_url}/route",
+                json=payload_without_blocks,
+                headers={"Content-Type": "application/json"},
+            ) as response:
+                if response.status == 200:
+                    route_without_blocks = await response.json()
+                    results["route_without_blocks"] = {
+                        "success": True,
+                        "distance_km": round(
+                            route_without_blocks["paths"][0]["distance"] / 1000, 2
+                        ),
+                        "time_minutes": round(
+                            route_without_blocks["paths"][0]["time"] / 60000, 1
+                        ),
+                        "coordinates_count": len(
+                            route_without_blocks["paths"][0]["points"]["coordinates"]
+                        ),
+                        "first_5_coords": route_without_blocks["paths"][0]["points"][
+                            "coordinates"
+                        ][:5],
+                        "last_5_coords": route_without_blocks["paths"][0]["points"][
+                            "coordinates"
+                        ][-5:],
+                    }
+                else:
+                    results["route_without_blocks"] = {
+                        "success": False,
+                        "error": f"Status {response.status}: {await response.text()}",
+                    }
+
+            # Test with blocks
+            async with session.post(
+                f"{base_url}/route",
+                json=payload_with_blocks,
+                headers={"Content-Type": "application/json"},
+            ) as response:
+                if response.status == 200:
+                    route_with_blocks = await response.json()
+                    results["route_with_blocks"] = {
+                        "success": True,
+                        "distance_km": round(
+                            route_with_blocks["paths"][0]["distance"] / 1000, 2
+                        ),
+                        "time_minutes": round(
+                            route_with_blocks["paths"][0]["time"] / 60000, 1
+                        ),
+                        "coordinates_count": len(
+                            route_with_blocks["paths"][0]["points"]["coordinates"]
+                        ),
+                        "first_5_coords": route_with_blocks["paths"][0]["points"][
+                            "coordinates"
+                        ][:5],
+                        "last_5_coords": route_with_blocks["paths"][0]["points"][
+                            "coordinates"
+                        ][-5:],
+                    }
+                else:
+                    results["route_with_blocks"] = {
+                        "success": False,
+                        "error": f"Status {response.status}: {await response.text()}",
+                    }
+
+        # Analysis
+        analysis = {
+            "blocked_areas_count": len(blocked_areas),
+            "blocked_areas_sample": blocked_areas[:2] if blocked_areas else [],
+            "request_points": {
+                "start": [request.start_lat, request.start_lon],
+                "end": [request.end_lat, request.end_lon],
+            },
+            "routes_different": False,
+            "distance_difference_km": 0,
+            "time_difference_minutes": 0,
+        }
+
+        if results.get("route_without_blocks", {}).get("success") and results.get(
+            "route_with_blocks", {}
+        ).get("success"):
+            dist_without = results["route_without_blocks"]["distance_km"]
+            dist_with = results["route_with_blocks"]["distance_km"]
+            time_without = results["route_without_blocks"]["time_minutes"]
+            time_with = results["route_with_blocks"]["time_minutes"]
+
+            analysis["routes_different"] = (
+                abs(dist_without - dist_with) > 0.1
+            )  # 100m difference
+            analysis["distance_difference_km"] = round(dist_with - dist_without, 2)
+            analysis["time_difference_minutes"] = round(time_with - time_without, 1)
+
+        return {
+            "analysis": analysis,
+            "results": results,
+            "graphhopper_payloads": {
+                "without_blocks": payload_without_blocks,
+                "with_blocks": payload_with_blocks,
+            },
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "request": {
+                "start": [request.start_lat, request.start_lon],
+                "end": [request.end_lat, request.end_lon],
+                "profile": request.profile,
+            },
+        }
+
+
+@router.get("/check-point-in-polygon", include_in_schema=False)
+async def check_point_in_polygon(
+    lat: float,
+    lon: float,
+    db: Session = Depends(get_db),
+):
+    """
+    Check if a point is inside any restricted area polygon.
+    """
+    try:
+        from app.services.geofencing import get_active_restricted_areas_for_routing
+        from shapely.wkt import loads
+        from shapely.geometry import Point
+
+        blocked_areas = await get_active_restricted_areas_for_routing(db)
+        point = Point(lon, lat)  # Shapely uses (x, y) which is (lon, lat)
+
+        results = []
+        for i, wkt_polygon in enumerate(blocked_areas):
+            try:
+                polygon = loads(wkt_polygon)
+                is_inside = polygon.contains(point)
+                results.append(
+                    {
+                        "polygon_index": i,
+                        "wkt": wkt_polygon[:100] + "..."
+                        if len(wkt_polygon) > 100
+                        else wkt_polygon,
+                        "point_inside": is_inside,
+                        "polygon_bounds": list(
+                            polygon.bounds
+                        ),  # (minx, miny, maxx, maxy)
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "polygon_index": i,
+                        "wkt": wkt_polygon[:100] + "...",
+                        "error": str(e),
+                    }
+                )
+
+        return {
+            "point": {"lat": lat, "lon": lon},
+            "total_polygons": len(blocked_areas),
+            "polygons_containing_point": sum(
+                1 for r in results if r.get("point_inside")
+            ),
+            "results": results,
+        }
+
+    except Exception as e:
+        return {"error": str(e), "point": {"lat": lat, "lon": lon}}
+
+
+@router.get("/test-northeast-india-routing", include_in_schema=False)
+async def test_northeast_india_routing():
+    """
+    Test GraphHopper routing with predefined North East India coordinates.
+    Tests multiple city pairs to ensure the service is working correctly.
+    """
+    try:
+        import aiohttp
+
+        base_url = "https://maps.rustedshader.com"
+
+        # North East India test coordinates
+        test_routes = [
+            {
+                "name": "Guwahati to Shillong",
+                "start": [91.7362, 26.1445],  # Guwahati
+                "end": [91.8933, 25.5788],  # Shillong
+                "profile": "car",
+            },
+            {
+                "name": "Guwahati to Dibrugarh",
+                "start": [91.7362, 26.1445],  # Guwahati
+                "end": [94.9120, 27.4728],  # Dibrugarh
+                "profile": "car",
+            },
+            {
+                "name": "Silchar to Imphal",
+                "start": [92.7789, 24.8333],  # Silchar
+                "end": [93.9063, 24.8170],  # Imphal
+                "profile": "car",
+            },
+            {
+                "name": "Short route in Guwahati",
+                "start": [91.7362, 26.1445],  # Guwahati center
+                "end": [91.7500, 26.1600],  # Nearby location
+                "profile": "car",
+            },
+        ]
+
+        results = {}
+
+        async with aiohttp.ClientSession() as session:
+            for test_route in test_routes:
+                route_name = test_route["name"]
+
+                # Test without block_areas first
+                payload = {
+                    "profile": test_route["profile"],
+                    "points_encoded": False,
+                    "points": [
+                        test_route["start"],  # [lon, lat]
+                        test_route["end"],
+                    ],
+                }
+
+                try:
+                    async with session.post(
+                        f"{base_url}/route",
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30,
+                    ) as response:
+                        if response.status == 200:
+                            route_data = await response.json()
+                            path = (
+                                route_data["paths"][0]
+                                if route_data.get("paths")
+                                else {}
+                            )
+
+                            results[route_name] = {
+                                "success": True,
+                                "distance_km": round(path.get("distance", 0) / 1000, 2),
+                                "time_minutes": round(path.get("time", 0) / 60000, 1),
+                                "coordinates_count": len(
+                                    path.get("points", {}).get("coordinates", [])
+                                ),
+                                "start_coord": test_route["start"],
+                                "end_coord": test_route["end"],
+                                "first_route_coord": path.get("points", {}).get(
+                                    "coordinates", [[]]
+                                )[0]
+                                if path.get("points", {}).get("coordinates")
+                                else None,
+                                "last_route_coord": path.get("points", {}).get(
+                                    "coordinates", [[]]
+                                )[-1]
+                                if path.get("points", {}).get("coordinates")
+                                else None,
+                                "bbox": path.get("bbox", []),
+                            }
+                        else:
+                            error_text = await response.text()
+                            results[route_name] = {
+                                "success": False,
+                                "status": response.status,
+                                "error": error_text[:300],
+                                "start_coord": test_route["start"],
+                                "end_coord": test_route["end"],
+                            }
+
+                except Exception as e:
+                    results[route_name] = {
+                        "success": False,
+                        "error": f"Request failed: {str(e)}",
+                        "start_coord": test_route["start"],
+                        "end_coord": test_route["end"],
+                    }
+
+        # Summary
+        successful_routes = sum(1 for r in results.values() if r.get("success"))
+        total_routes = len(results)
+
+        return {
+            "graphhopper_url": base_url,
+            "region": "North East India",
+            "summary": {
+                "successful_routes": successful_routes,
+                "total_routes": total_routes,
+                "success_rate": f"{successful_routes}/{total_routes}",
+                "service_working": successful_routes > 0,
+            },
+            "test_results": results,
+            "notes": [
+                "All coordinates are in North East India region",
+                "Testing basic routing functionality",
+                "This helps verify GraphHopper is working before testing block_areas",
+            ],
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "graphhopper_url": base_url,
+            "message": "Failed to test GraphHopper service",
+        }
+
+
+@router.post("/test-northeast-with-blocks", include_in_schema=False)
+async def test_northeast_with_blocks(
+    db: Session = Depends(get_db),
+):
+    """
+    Test GraphHopper with block_areas using North East India coordinates.
+    """
+    try:
+        import aiohttp
+        from app.services.geofencing import get_active_restricted_areas_for_routing
+
+        # Get blocked areas
+        blocked_areas = await get_active_restricted_areas_for_routing(db)
+
+        base_url = "https://maps.rustedshader.com"
+
+        # Test route that might intersect with restricted areas
+        test_coordinates = {
+            "start": [91.7362, 26.1445],  # Guwahati [lon, lat]
+            "end": [91.8933, 25.5788],  # Shillong [lon, lat]
+        }
+
+        results = {}
+
+        async with aiohttp.ClientSession() as session:
+            # Test 1: Without block_areas
+            payload_without = {
+                "profile": "car",
+                "points_encoded": False,
+                "points": [test_coordinates["start"], test_coordinates["end"]],
+            }
+
+            async with session.post(
+                f"{base_url}/route",
+                json=payload_without,
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            ) as response:
+                if response.status == 200:
+                    route_data = await response.json()
+                    path = route_data["paths"][0]
+                    results["without_blocks"] = {
+                        "success": True,
+                        "distance_km": round(path["distance"] / 1000, 2),
+                        "time_minutes": round(path["time"] / 60000, 1),
+                        "coordinates_count": len(path["points"]["coordinates"]),
+                        "route_sample": {
+                            "first_5": path["points"]["coordinates"][:5],
+                            "last_5": path["points"]["coordinates"][-5:],
+                        },
+                    }
+                else:
+                    results["without_blocks"] = {
+                        "success": False,
+                        "error": f"Status {response.status}: {await response.text()}",
+                    }
+
+            # Test 2: With block_areas
+            if blocked_areas:
+                payload_with = {
+                    "profile": "car",
+                    "points_encoded": False,
+                    "points": [test_coordinates["start"], test_coordinates["end"]],
+                    "block_areas": blocked_areas,
+                }
+
+                async with session.post(
+                    f"{base_url}/route",
+                    json=payload_with,
+                    headers={"Content-Type": "application/json"},
+                    timeout=30,
+                ) as response:
+                    if response.status == 200:
+                        route_data = await response.json()
+                        path = route_data["paths"][0]
+                        results["with_blocks"] = {
+                            "success": True,
+                            "distance_km": round(path["distance"] / 1000, 2),
+                            "time_minutes": round(path["time"] / 60000, 1),
+                            "coordinates_count": len(path["points"]["coordinates"]),
+                            "route_sample": {
+                                "first_5": path["points"]["coordinates"][:5],
+                                "last_5": path["points"]["coordinates"][-5:],
+                            },
+                        }
+                    else:
+                        error_text = await response.text()
+                        results["with_blocks"] = {
+                            "success": False,
+                            "error": f"Status {response.status}: {error_text[:300]}",
+                        }
+            else:
+                results["with_blocks"] = {
+                    "success": False,
+                    "error": "No blocked areas found in database",
+                }
+
+        # Analysis
+        analysis = {
+            "blocked_areas_count": len(blocked_areas),
+            "test_route": "Guwahati to Shillong",
+            "coordinates": test_coordinates,
+            "routes_are_different": False,
+            "difference_analysis": {},
+        }
+
+        if results.get("without_blocks", {}).get("success") and results.get(
+            "with_blocks", {}
+        ).get("success"):
+            without_dist = results["without_blocks"]["distance_km"]
+            with_dist = results["with_blocks"]["distance_km"]
+            without_time = results["without_blocks"]["time_minutes"]
+            with_time = results["with_blocks"]["time_minutes"]
+
+            analysis["routes_are_different"] = abs(without_dist - with_dist) > 0.1
+            analysis["difference_analysis"] = {
+                "distance_difference_km": round(with_dist - without_dist, 2),
+                "time_difference_minutes": round(with_time - without_time, 1),
+                "distance_change_percent": round(
+                    ((with_dist - without_dist) / without_dist) * 100, 2
+                )
+                if without_dist > 0
+                else 0,
+            }
+
+        return {
+            "analysis": analysis,
+            "results": results,
+            "blocked_areas_sample": blocked_areas[:2] if blocked_areas else [],
+            "region": "North East India (Guwahati to Shillong)",
+            "conclusion": "Routes are identical - block_areas not working"
+            if not analysis.get("routes_are_different") and blocked_areas
+            else "Routes are different - block_areas working"
+            if analysis.get("routes_are_different")
+            else "Need to check blocked areas",
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "message": "Failed to test North East India routing with blocks",
+        }
+
+
+@router.post("/test-custom-model-geofencing", include_in_schema=False)
+async def test_custom_model_geofencing(
+    request: RoutingTestRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Test the new Custom Model approach for geofencing with GraphHopper.
+    """
+    try:
+        from app.services.routing import graphhopper_service
+
+        # Test the new Custom Model implementation
+        route_data = await graphhopper_service.get_route(
+            start_lat=request.start_lat,
+            start_lon=request.start_lon,
+            end_lat=request.end_lat,
+            end_lon=request.end_lon,
+            profile=request.profile,
+            db=db,
+            include_block_areas=True,
+        )
+
+        # Also get the GeoJSON data directly for comparison
+        restricted_geojson = await graphhopper_service._get_restricted_areas_as_geojson(
+            db
+        )
+
+        if route_data:
+            summary = graphhopper_service.extract_route_summary(route_data)
+
+            return {
+                "success": True,
+                "approach": "Custom Model with areas (2025 method)",
+                "route": {
+                    "type": "Feature",
+                    "properties": {
+                        "distance_km": summary.get("distance_km", 0),
+                        "time_minutes": summary.get("time_minutes", 0),
+                        "profile": request.profile,
+                        "restricted_areas_count": len(
+                            restricted_geojson.get("features", [])
+                        )
+                        if restricted_geojson
+                        else 0,
+                    },
+                    "geometry": summary.get(
+                        "geometry", {"type": "LineString", "coordinates": []}
+                    ),
+                },
+                "debug": {
+                    "restricted_areas_geojson": restricted_geojson,
+                    "custom_model_used": restricted_geojson is not None,
+                    "ch_disabled": restricted_geojson is not None,
+                    "request_coordinates": {
+                        "start": [request.start_lat, request.start_lon],
+                        "end": [request.end_lat, request.end_lon],
+                    },
+                },
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No route found with Custom Model",
+                "debug": {
+                    "restricted_areas_geojson": restricted_geojson,
+                    "custom_model_attempted": restricted_geojson is not None,
+                },
+            }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "approach": "Custom Model with areas (2025 method)",
+        }

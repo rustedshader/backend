@@ -24,7 +24,7 @@ class GraphHopperService:
         include_block_areas: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """
-        Get route between two points using GraphHopper API.
+        Get route between two points using GraphHopper API with Custom Model for area avoidance.
 
         Args:
             start_lat: Starting latitude
@@ -33,7 +33,7 @@ class GraphHopperService:
             end_lon: Destination longitude
             profile: Transportation profile (car, foot, bike)
             db: Database session for fetching restricted areas
-            include_block_areas: Whether to include restricted areas as blocked areas
+            include_block_areas: Whether to include restricted areas using Custom Model
 
         Returns:
             Route data from GraphHopper API or None if error
@@ -50,21 +50,41 @@ class GraphHopperService:
             ],
         }
 
-        # Add block areas if database session is provided and include_block_areas is True
+        # Add custom model with restricted areas if database session is provided
         if db and include_block_areas:
-            block_areas = await self._get_active_restricted_areas(db)
-            if block_areas:
-                payload["block_areas"] = block_areas
-                print(
-                    f"DEBUG: Adding {len(block_areas)} block areas to GraphHopper request"
-                )
-                # Print first block area for debugging
-                if block_areas:
-                    print(f"DEBUG: First block area: {block_areas[0][:100]}...")
-            else:
-                print("DEBUG: No active restricted areas found for blocking")
+            restricted_areas_geojson = await self._get_restricted_areas_as_geojson(db)
+            if restricted_areas_geojson:
+                payload["ch.disable"] = True  # Required for custom models
+                payload["custom_model"] = {
+                    "priority": [],
+                    "areas": restricted_areas_geojson,
+                }
 
-        print(f"DEBUG: GraphHopper request payload: {payload}")
+                # Add priority rules to avoid each restricted area
+                features = restricted_areas_geojson.get("features", [])
+                for feature in features:
+                    area_id = feature.get("id", "")
+                    if area_id:
+                        payload["custom_model"]["priority"].append(
+                            {
+                                "if": f"in_{area_id}",
+                                "multiply_by": "0",  # Complete avoidance
+                            }
+                        )
+
+                print(
+                    f"DEBUG: Adding Custom Model with {len(features)} restricted areas"
+                )
+                print(
+                    f"DEBUG: Custom Model priority rules: {payload['custom_model']['priority']}"
+                )
+            else:
+                print("DEBUG: No active restricted areas found for Custom Model")
+
+        print(f"DEBUG: GraphHopper request URL: {url}")
+        print(
+            f"DEBUG: GraphHopper request has custom_model: {'custom_model' in payload}"
+        )
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -129,6 +149,7 @@ class GraphHopperService:
     async def _get_active_restricted_areas(self, db: object) -> List[str]:
         """
         Get all active restricted areas as WKT POLYGON strings for block_areas.
+        DEPRECATED: Use _get_restricted_areas_as_geojson for Custom Models.
 
         Args:
             db: Database session
@@ -145,6 +166,101 @@ class GraphHopperService:
         except Exception as e:
             print(f"Error fetching restricted areas for routing: {e}")
             return []
+
+    async def _get_restricted_areas_as_geojson(
+        self, db: object
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get all active restricted areas as GeoJSON FeatureCollection for Custom Models.
+
+        Args:
+            db: Database session
+
+        Returns:
+            GeoJSON FeatureCollection with restricted area polygons or None if no areas
+        """
+        try:
+            from app.services.geofencing import get_active_restricted_areas_for_routing
+            import re
+
+            # Get WKT polygons
+            wkt_polygons = await get_active_restricted_areas_for_routing(db)
+
+            if not wkt_polygons:
+                return None
+
+            features = []
+
+            for i, wkt_polygon in enumerate(wkt_polygons):
+                try:
+                    # Parse WKT POLYGON to extract coordinates
+                    # Example: "POLYGON((lon1 lat1,lon2 lat2,lon3 lat3,lon1 lat1))"
+
+                    # Use regex to extract coordinate pairs
+                    match = re.search(r"POLYGON\(\((.*?)\)\)", wkt_polygon)
+                    if not match:
+                        print(
+                            f"Warning: Invalid WKT format for polygon {i}: {wkt_polygon[:50]}..."
+                        )
+                        continue
+
+                    coords_str = match.group(1)
+                    coord_pairs = coords_str.split(",")
+
+                    # Convert to [longitude, latitude] pairs
+                    coordinates = []
+                    for pair in coord_pairs:
+                        lon_lat = pair.strip().split(" ")
+                        if len(lon_lat) == 2:
+                            try:
+                                lon, lat = float(lon_lat[0]), float(lon_lat[1])
+                                coordinates.append([lon, lat])
+                            except ValueError:
+                                print(f"Warning: Invalid coordinate pair: {pair}")
+                                continue
+
+                    if len(coordinates) < 4:  # Need at least 4 points for a polygon
+                        print(f"Warning: Insufficient coordinates for polygon {i}")
+                        continue
+
+                    # Ensure polygon is closed (first and last coordinates are the same)
+                    if coordinates[0] != coordinates[-1]:
+                        coordinates.append(coordinates[0])
+
+                    # Create GeoJSON Feature
+                    feature = {
+                        "type": "Feature",
+                        "id": f"restricted_area_{i}",
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [coordinates],  # Array of linear ring arrays
+                        },
+                        "properties": {
+                            "name": f"Restricted Area {i + 1}",
+                            "restriction_type": "avoid",
+                        },
+                    }
+
+                    features.append(feature)
+
+                except Exception as e:
+                    print(f"Error processing WKT polygon {i}: {e}")
+                    continue
+
+            if not features:
+                print("No valid restricted area features could be created")
+                return None
+
+            geojson_collection = {"type": "FeatureCollection", "features": features}
+
+            print(
+                f"Created GeoJSON FeatureCollection with {len(features)} restricted areas"
+            )
+            return geojson_collection
+
+        except Exception as e:
+            print(f"Error creating GeoJSON from restricted areas: {e}")
+            return None
 
     def extract_route_summary(self, route_data: Dict[str, Any]) -> Dict[str, Any]:
         """
