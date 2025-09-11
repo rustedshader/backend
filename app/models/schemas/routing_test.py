@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
 
 
 class RoutingTestRequest(BaseModel):
@@ -9,9 +10,15 @@ class RoutingTestRequest(BaseModel):
     profile: str = Field(default="car", description="Transportation profile")
 
 
+class GeoJSONGeometry(BaseModel):
+    type: str
+    coordinates: List[List[float]]
+
+
 class RoutingTestResponse(BaseModel):
-    route_summary: dict
-    raw_route_data: dict
+    geojson: Dict[str, Any]
+    route_summary: Dict[str, Any]
     blocked_areas_count: int
-    blocked_areas: list
-    request_details: dict
+    blocked_areas: List[str]
+    request_details: Dict[str, Any]
+    debug_info: Optional[Dict[str, Any]] = None

@@ -55,18 +55,34 @@ class GraphHopperService:
             block_areas = await self._get_active_restricted_areas(db)
             if block_areas:
                 payload["block_areas"] = block_areas
+                print(
+                    f"DEBUG: Adding {len(block_areas)} block areas to GraphHopper request"
+                )
+                # Print first block area for debugging
+                if block_areas:
+                    print(f"DEBUG: First block area: {block_areas[0][:100]}...")
+            else:
+                print("DEBUG: No active restricted areas found for blocking")
+
+        print(f"DEBUG: GraphHopper request payload: {payload}")
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     url, json=payload, headers={"Content-Type": "application/json"}
                 ) as response:
+                    response_text = await response.text()
+                    print(f"DEBUG: GraphHopper response status: {response.status}")
+
                     if response.status == 200:
-                        return await response.json()
+                        result = await response.json()
+                        print(
+                            f"DEBUG: GraphHopper returned route with {len(result.get('paths', []))} paths"
+                        )
+                        return result
                     else:
                         print(f"GraphHopper API error: {response.status}")
-                        error_text = await response.text()
-                        print(f"Error details: {error_text}")
+                        print(f"Error details: {response_text}")
                         return None
         except Exception as e:
             print(f"Error calling GraphHopper API: {e}")
