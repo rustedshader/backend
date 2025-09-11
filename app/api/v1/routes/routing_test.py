@@ -6,17 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 from app.api.deps import get_current_user, get_db
 from app.models.database.user import User
+from app.models.schemas.routing_test import RoutingTestRequest, RoutingTestResponse
 
 router = APIRouter(prefix="/routing-test", tags=["routing-test"])
 
 
-@router.post("/test-route-with-geofencing")
+@router.post("/test-route-with-geofencing", response_model=RoutingTestResponse)
 async def test_route_with_geofencing(
-    start_lat: float,
-    start_lon: float,
-    end_lat: float,
-    end_lon: float,
-    profile: str = "car",
+    request: RoutingTestRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -40,11 +37,11 @@ async def test_route_with_geofencing(
         from app.services.routing import graphhopper_service
 
         route_data = await graphhopper_service.get_route(
-            start_lat=start_lat,
-            start_lon=start_lon,
-            end_lat=end_lat,
-            end_lon=end_lon,
-            profile=profile,
+            start_lat=request.start_lat,
+            start_lon=request.start_lon,
+            end_lat=request.end_lat,
+            end_lon=request.end_lon,
+            profile=request.profile,
             db=db,
             include_block_areas=True,
         )
@@ -71,9 +68,12 @@ async def test_route_with_geofencing(
             if blocked_areas
             else [],  # Show first 5 for debugging
             "request_details": {
-                "start": {"latitude": start_lat, "longitude": start_lon},
-                "end": {"latitude": end_lat, "longitude": end_lon},
-                "profile": profile,
+                "start": {
+                    "latitude": request.start_lat,
+                    "longitude": request.start_lon,
+                },
+                "end": {"latitude": request.end_lat, "longitude": request.end_lon},
+                "profile": request.profile,
                 "geofencing_enabled": True,
             },
         }
