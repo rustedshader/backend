@@ -16,6 +16,7 @@ from app.models.database.guides import (
     GuideTrek,
 )
 from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
+from app.models.database.location_sharing import LocationShareHistory
 
 
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "GuideTrek",
     "TrackingDevice",
     "TrackingDeviceStatusEnum",
+    "LocationShareHistory",
 ]
