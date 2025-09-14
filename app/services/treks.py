@@ -1,5 +1,5 @@
 from app.models.schemas.treks import TrekCreate, TrekUpdate, TrekDataUpdate
-from app.models.database.treks import Trek, TrekRouteData
+from app.models.database.offline_activity import Trek, TrekRouteData
 from sqlmodel import select, Session
 from shapely.geometry import LineString
 from geoalchemy2.shape import from_shape

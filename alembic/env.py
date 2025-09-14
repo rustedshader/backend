@@ -4,7 +4,11 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from app.models.database.treks import DifficultyLevelEnum, Trek, TrekRouteData
+from app.models.database.offline_activity import (
+    DifficultyLevelEnum,
+    Trek,
+    TrekRouteData,
+)
 from app.models.database.trips import (
     Trips,
     TripStatusEnum,
@@ -28,7 +32,7 @@ from app.models.database.itinerary import (
     AccommodationTypeEnum,
     TransportModeEnum,
 )
-from app.models.database.places import Place, PlaceTypeEnum
+from app.models.database.online_activity import Place, PlaceTypeEnum
 from app.models.database.test_coordinates import TestCoordinates
 from app.core.config import settings
 from app.models.database.base import SQLModel

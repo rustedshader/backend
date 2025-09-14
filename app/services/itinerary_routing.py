@@ -5,8 +5,8 @@ Service for generating routes for itineraries.
 from sqlmodel import Session, select
 from typing import Optional
 from app.models.database.itinerary import Itinerary, ItineraryDay
-from app.models.database.places import Place
-from app.models.database.treks import Trek
+from app.models.database.online_activity import Place
+from app.models.database.offline_activity import Trek
 from app.models.schemas.routing import (
     RoutePoint,
     RouteSegment,

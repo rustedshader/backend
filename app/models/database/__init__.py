@@ -1,7 +1,7 @@
 from .user import User, UserRoleEnum, RefreshToken
 from .guides import Guides, GuideCertificationLevelEnum, GuideSpecialtyEnum
-from .places import Place, PlaceTypeEnum
-from .treks import Trek, TrekRouteData, DifficultyLevelEnum
+from .online_activity import Place, PlaceTypeEnum
+from .offline_activity import Trek, TrekRouteData, DifficultyLevelEnum
 from .tracking_device import TrackingDevice, TrackingDeviceStatusEnum
 from .trips import (
     Trips,
@@ -24,6 +24,7 @@ from .geofencing import (
     RestrictedAreaStatusEnum,
     RestrictedAreaTypeEnum,
 )
+from .accommodation import Accommodation
 
 __all__ = [
     # User models
@@ -67,4 +68,5 @@ __all__ = [
     "GeofenceViolations",
     "RestrictedAreaStatusEnum",
     "RestrictedAreaTypeEnum",
+    "Accommodation",
 ]

@@ -1,17 +1,18 @@
 from sqlmodel import Field, SQLModel
 from typing import Optional
 import datetime
+from geoalchemy2 import Geometry
+from sqlalchemy import Column
 
 
-class Trip(SQLModel, table=True):
-    __tablename__ = "trips"
+class LocationHistory(SQLModel, table=True):
+    __tablename__ = "location_histories"
 
     id: int = Field(default=None, primary_key=True, index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
-    status: str = Field(index=True)  # e.g., planned, completed, cancelled
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
+    location: Geometry = Field(
+        sa_column=Column(Geometry(geometry_type="POINT", srid=4326)), index=True
     )
-    updated_at: datetime = Field(
+    timestamp: datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )

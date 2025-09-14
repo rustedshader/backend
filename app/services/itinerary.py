@@ -6,8 +6,8 @@ from app.models.database.itinerary import (
     ItineraryTypeEnum,
 )
 from app.models.database.trips import Trips, TripStatusEnum, TripTypeEnum
-from app.models.database.places import Place
-from app.models.database.treks import Trek
+from app.models.database.online_activity import Place
+from app.models.database.offline_activity import Trek
 from app.models.schemas.itinerary import ItineraryCreate, ItineraryUpdate
 from typing import List, Optional
 import datetime

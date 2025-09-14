@@ -13,10 +13,10 @@ from app.models.database.trips import (
     TrekPhaseEnum,
     TourPhaseEnum,
 )
-from app.models.database.treks import Trek
+from app.models.database.offline_activity import Trek
 from app.models.database.user import User
 from app.models.database.itinerary import ItineraryDay
-from app.models.database.places import Place
+from app.models.database.online_activity import Place
 from app.models.schemas.trip_tracking import (
     LocationBatch,
     LiveLocationUpdate,

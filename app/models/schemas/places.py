@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from app.models.database.places import PlaceTypeEnum
+from app.models.database.online_activity import PlaceTypeEnum
 
 
 class PlaceBase(BaseModel):

@@ -1,5 +1,5 @@
 from sqlmodel import Session, select, and_
-from app.models.database.places import Place
+from app.models.database.online_activity import Place
 from app.models.schemas.places import PlaceCreate, PlaceUpdate, PlaceSearchQuery
 from typing import List, Optional, Tuple
 import datetime

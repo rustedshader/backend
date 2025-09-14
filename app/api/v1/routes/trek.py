@@ -8,7 +8,7 @@ from app.models.schemas.treks import (
 )
 from app.models.database.base import get_db
 from app.models.database.user import User
-from app.models.database.treks import Trek
+from app.models.database.offline_activity import Trek
 from sqlmodel import Session
 from app.services.treks import (
     create_trecks,

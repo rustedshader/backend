@@ -31,6 +31,10 @@ class User(SQLModel, table=True):
     is_kyc_verified: bool = Field(default=False)
     is_email_verified: bool = Field(default=False)
     is_active: bool = Field(default=True)
+    special_requirment: Optional[str] = Field(default=None)
+    emergency_contact_name: Optional[str] = Field(default=None)
+    emergency_contact_phone: Optional[str] = Field(default=None)
+    emergency_contact_relation: Optional[str] = Field(default=None)
     role: UserRoleEnum = Field(default=UserRoleEnum.TOURIST)
 
 
