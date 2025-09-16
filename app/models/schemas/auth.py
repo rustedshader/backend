@@ -66,6 +66,8 @@ class BlockchainIDResponse(BaseModel):
     success: bool
     message: str
     tourist_id_token: int | None = None
+    trip_id: int | None = None
+    trip_status: str | None = None
     blockchain_address: str | None = None
     transaction_hash: str | None = None
     blockchain_private_key: str | None = None

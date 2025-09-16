@@ -20,8 +20,10 @@ class TouristIDInfoResponse(BaseModel):
 
 class TouristIDStatusResponse(BaseModel):
     has_tourist_id: bool
-    tourist_id_token: Optional[int] = None
+    trip_id: Optional[int] = None
+    tourist_id_token: Optional[str] = None
     transaction_hash: Optional[str] = None
+    trip_status: Optional[str] = None
     is_valid: bool = False
     info: Optional[TouristIDInfoResponse] = None
 
@@ -33,11 +35,14 @@ async def get_tourist_id_status(
     """Get the current user's tourist ID status and information."""
     service = TouristIDService()
 
-    if not current_user.tourist_id_token:
+    # Get user's active trip with tourist ID
+    active_trip = service.get_user_active_trip(current_user.id, db)
+
+    if not active_trip or not active_trip.tourist_id:
         return TouristIDStatusResponse(has_tourist_id=False, is_valid=False)
 
-    is_valid = service.is_tourist_id_valid(current_user)
-    info = service.get_tourist_id_info(current_user)
+    is_valid = service.is_tourist_id_valid(active_trip)
+    info = service.get_tourist_id_info(active_trip)
 
     info_response = None
     if info:
@@ -51,8 +56,10 @@ async def get_tourist_id_status(
 
     return TouristIDStatusResponse(
         has_tourist_id=True,
-        tourist_id_token=current_user.tourist_id_token,
-        transaction_hash=current_user.tourist_id_transaction_hash,
+        trip_id=active_trip.id,
+        tourist_id_token=active_trip.tourist_id,
+        transaction_hash=active_trip.blockchain_transaction_hash,
+        trip_status=active_trip.status.value,
         is_valid=is_valid,
         info=info_response,
     )
@@ -66,24 +73,31 @@ async def get_tourist_id_status(
 async def revoke_tourist_id(
     current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
-    """Revoke the current user's tourist ID."""
-    if not current_user.tourist_id_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User does not have a tourist ID to revoke",
-        )
-
+    """Revoke the current user's tourist ID and cancel the active trip."""
     service = TouristIDService()
 
+    # Get user's active trip with tourist ID
+    active_trip = service.get_user_active_trip(current_user.id, db)
+
+    if not active_trip or not active_trip.tourist_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not have an active tourist ID to revoke",
+        )
+
     try:
-        success = service.revoke_tourist_id(current_user, db)
+        success = service.revoke_tourist_id(active_trip, db)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to revoke tourist ID",
             )
 
-        return {"message": "Tourist ID revoked successfully"}
+        return {
+            "message": "Tourist ID revoked successfully and trip cancelled",
+            "trip_id": active_trip.id,
+            "trip_status": "cancelled",
+        }
 
     except Exception as e:
         raise HTTPException(

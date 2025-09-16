@@ -17,7 +17,7 @@ from app.models.schemas.auth import (
     BlockchainIDResponse,
 )
 from app.services.users import UserService
-from app.services.auth import issue_blockchain_id_at_entry_point
+from app.api.v1.routes.admin import issue_blockchain_id_at_entry_point
 
 router = APIRouter(prefix="/users", tags=["user-management"])
 
