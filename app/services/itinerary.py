@@ -2,257 +2,210 @@ from sqlmodel import Session, select
 from app.models.database.itinerary import (
     Itinerary,
     ItineraryDay,
-    ItineraryStatusEnum,
-    ItineraryTypeEnum,
 )
-from app.models.database.trips import Trips, TripStatusEnum, TripTypeEnum
-from app.models.database.online_activity import Place
-from app.models.database.offline_activity import Trek
-from app.models.schemas.itinerary import ItineraryCreate, ItineraryUpdate
+from app.models.schemas.itinerary import (
+    ItineraryCreate,
+    ItineraryDayCreate,
+    ItineraryUpdate,
+    ItineraryDayUpdate,
+)
 from typing import List, Optional
 import datetime
 
 
 async def create_itinerary(
-    user_id: int, itinerary_data: ItineraryCreate, db: Session
+    itinerary_data: ItineraryCreate, user_id: int, db: Session
 ) -> Itinerary:
-    """Create a new itinerary for either treks or places (city tours) with accommodation and daily planning, and automatically create a trip."""
     try:
-        # Validate based on itinerary type
-        if (
-            itinerary_data.itinerary_type == ItineraryTypeEnum.TREK
-            and itinerary_data.trek_id
-        ):
-            # Verify trek exists
-            trek_statement = select(Trek).where(Trek.id == itinerary_data.trek_id)
-            trek = db.exec(trek_statement).first()
-            if not trek:
-                raise ValueError(f"Trek with ID {itinerary_data.trek_id} not found")
-
-        if (
-            itinerary_data.itinerary_type == ItineraryTypeEnum.CITY_TOUR
-            and itinerary_data.primary_place_id
-        ):
-            # Verify place exists
-            place_statement = select(Place).where(
-                Place.id == itinerary_data.primary_place_id
-            )
-            place = db.exec(place_statement).first()
-            if not place:
-                raise ValueError(
-                    f"Place with ID {itinerary_data.primary_place_id} not found"
-                )
-
-        # Calculate total duration
-        total_duration = (itinerary_data.end_date - itinerary_data.start_date).days + 1
-
-        # Create main itinerary and set status to ACTIVE (no approval needed)
-        itinerary = Itinerary(
+        new_itinerary = Itinerary(
             user_id=user_id,
-            itinerary_type=itinerary_data.itinerary_type,
-            trek_id=itinerary_data.trek_id,
-            primary_place_id=itinerary_data.primary_place_id,
             title=itinerary_data.title,
             description=itinerary_data.description,
             destination_city=itinerary_data.destination_city,
             destination_state=itinerary_data.destination_state,
-            destination_country=itinerary_data.destination_country,
             start_date=itinerary_data.start_date,
             end_date=itinerary_data.end_date,
-            total_duration_days=total_duration,
-            estimated_budget=itinerary_data.estimated_budget,
-            number_of_travelers=itinerary_data.number_of_travelers,
-            purpose_of_visit=itinerary_data.purpose_of_visit,
-            emergency_contact_name=itinerary_data.emergency_contact_name,
-            emergency_contact_phone=itinerary_data.emergency_contact_phone,
-            emergency_contact_relation=itinerary_data.emergency_contact_relation,
-            preferred_language=itinerary_data.preferred_language,
-            special_requirements=itinerary_data.special_requirements,
-            status=ItineraryStatusEnum.ACTIVE,  # Set directly to ACTIVE
-            approved_at=int(datetime.datetime.utcnow().timestamp()),  # Auto-approved
+            total_duration_days=itinerary_data.total_duration_days,
         )
-
-        db.add(itinerary)
+        db.add(new_itinerary)
         db.commit()
-        db.refresh(itinerary)
+        db.refresh(new_itinerary)
 
-        # Create itinerary days (accommodation and daily planning)
-        for day_data in itinerary_data.itinerary_days:
-            itinerary_day = ItineraryDay(
-                itinerary_id=itinerary.id,
-                day_number=day_data.day_number,
-                date=day_data.date,
-                day_type=day_data.day_type,
-                trek_id=day_data.trek_id,
-                primary_place_id=day_data.primary_place_id,
-                planned_activities=day_data.planned_activities,
-                estimated_time_start=day_data.estimated_time_start,
-                estimated_time_end=day_data.estimated_time_end,
-                accommodation_name=day_data.accommodation_name,
-                accommodation_type=day_data.accommodation_type,
-                accommodation_address=day_data.accommodation_address,
-                accommodation_contact=day_data.accommodation_contact,
-                accommodation_latitude=day_data.accommodation_latitude,
-                accommodation_longitude=day_data.accommodation_longitude,
-                transport_mode=day_data.transport_mode,
-                transport_details=day_data.transport_details,
-                safety_notes=day_data.safety_notes,
-                special_instructions=day_data.special_instructions,
+        # Create itinerary days if provided
+        for day in itinerary_data.itinerary_days or []:
+            new_day = ItineraryDay(
+                itinerary_id=new_itinerary.id,
+                accommodation_id=day.accommodation_id,
+                day_number=day.day_number,
+                offline_activity_id=day.offline_activity_id,
+                online_activity_id=day.online_activity_id,
             )
-            db.add(itinerary_day)
-
+            db.add(new_day)
         db.commit()
 
-        # Auto-create a trip for this itinerary with rich data
-        try:
-            # Extract accommodation and destination info from first day if available
-            hotel_name = None
-            hotel_latitude = None
-            hotel_longitude = None
-            destination_name = (
-                f"{itinerary_data.destination_city}, {itinerary_data.destination_state}"
-            )
-            destination_latitude = None
-            destination_longitude = None
-
-            # Get accommodation details from the first itinerary day
-            if itinerary_data.itinerary_days and len(itinerary_data.itinerary_days) > 0:
-                first_day = itinerary_data.itinerary_days[0]
-                hotel_name = first_day.accommodation_name
-                hotel_latitude = first_day.accommodation_latitude
-                hotel_longitude = first_day.accommodation_longitude
-
-            # Try to get primary place coordinates for destination
-            if itinerary_data.primary_place_id:
-                primary_place = db.exec(
-                    select(Place).where(Place.id == itinerary_data.primary_place_id)
-                ).first()
-                if primary_place:
-                    destination_latitude = primary_place.latitude
-                    destination_longitude = primary_place.longitude
-                    destination_name = (
-                        f"{primary_place.name}, {itinerary_data.destination_city}"
-                    )
-
-            new_trip = Trips(
-                user_id=user_id,
-                itinerary_id=itinerary.id,
-                trek_id=itinerary_data.trek_id,
-                start_date=itinerary_data.start_date,
-                end_date=itinerary_data.end_date,
-                status=TripStatusEnum.ASSIGNED,
-                trip_type=TripTypeEnum.TOUR_DAY,
-                # Populate accommodation details
-                hotel_name=hotel_name,
-                hotel_latitude=hotel_latitude,
-                hotel_longitude=hotel_longitude,
-                # Populate destination details
-                destination_name=destination_name,
-                destination_latitude=destination_latitude,
-                destination_longitude=destination_longitude,
-                # Set current phase for tour
-                current_phase="tour_planning",
-            )
-            db.add(new_trip)
-            db.commit()
-            db.refresh(new_trip)
-            print(
-                f"✅ Successfully created trip ID: {new_trip.id} for itinerary ID: {itinerary.id} with accommodation: {hotel_name} and destination: {destination_name}"
-            )
-        except Exception as e:
-            print(f"❌ Error creating trip: {str(e)}")
-            db.rollback()
-            # Continue anyway since itinerary creation was successful
-
-        return itinerary
-
+        return new_itinerary
     except Exception as e:
         db.rollback()
+        print(e)
         raise e
-
-
-async def get_user_itineraries(user_id: int, db: Session) -> List[Itinerary]:
-    """Get all itineraries for a user."""
-    statement = select(Itinerary).where(Itinerary.user_id == user_id)
-    itineraries = db.exec(statement).all()
-    return list(itineraries)
 
 
 async def get_itinerary_by_id(
     itinerary_id: int, user_id: int, db: Session
 ) -> Optional[Itinerary]:
-    """Get a specific itinerary by ID, ensuring it belongs to the user."""
-    statement = select(Itinerary).where(
-        Itinerary.id == itinerary_id, Itinerary.user_id == user_id
-    )
-    return db.exec(statement).first()
-
-
-async def get_itinerary_days(itinerary_id: int, db: Session) -> List[ItineraryDay]:
-    """Get all days for a specific itinerary."""
-    statement = (
-        select(ItineraryDay)
-        .where(ItineraryDay.itinerary_id == itinerary_id)
-        .order_by(ItineraryDay.day_number)
-    )
-    return list(db.exec(statement).all())
-
-
-async def update_itinerary(
-    itinerary_id: int, user_id: int, update_data: ItineraryUpdate, db: Session
-) -> Optional[Itinerary]:
-    """Update an itinerary."""
     try:
-        # Get existing itinerary
+        statement = select(Itinerary).where(
+            Itinerary.id == itinerary_id, Itinerary.user_id == user_id
+        )
+        result = db.exec(statement).first()
+        return result
+    except Exception as e:
+        print(e)
+        raise e
+
+
+async def get_itinerary_by_id_with_days(
+    itinerary_id: int, user_id: int, db: Session
+) -> Optional[dict]:
+    """Get itinerary with its associated days for response"""
+    try:
+        # Get the itinerary
         itinerary = await get_itinerary_by_id(itinerary_id, user_id, db)
         if not itinerary:
             return None
 
-        # Update fields
-        update_dict = update_data.model_dump(exclude_unset=True)
-        for field, value in update_dict.items():
-            setattr(itinerary, field, value)
+        # Get the itinerary days
+        days = await get_itinerary_days(itinerary_id, db)
 
-        # Recalculate duration if dates changed
-        if update_data.start_date or update_data.end_date:
-            total_duration = (itinerary.end_date - itinerary.start_date).days + 1
-            itinerary.total_duration_days = total_duration
+        # Convert to dict format for response
+        itinerary_dict = {
+            "id": itinerary.id,
+            "user_id": itinerary.user_id,
+            "title": itinerary.title,
+            "description": itinerary.description,
+            "destination_city": itinerary.destination_city,
+            "destination_state": itinerary.destination_state,
+            "start_date": itinerary.start_date,
+            "end_date": itinerary.end_date,
+            "total_duration_days": itinerary.total_duration_days,
+            "created_at": itinerary.created_at,
+            "updated_at": itinerary.updated_at,
+            "itinerary_days": [
+                {
+                    "id": day.id,
+                    "itinerary_id": day.itinerary_id,
+                    "accommodation_id": day.accommodation_id,
+                    "day_number": day.day_number,
+                    "offline_activity_id": day.offline_activity_id,
+                    "online_activity_id": day.online_activity_id,
+                }
+                for day in days
+            ],
+        }
 
-        itinerary.updated_at = int(datetime.datetime.utcnow().timestamp())
+        return itinerary_dict
+    except Exception as e:
+        print(e)
+        raise e
 
-        db.add(itinerary)
+
+async def get_itineraries_by_user(user_id: int, db: Session) -> List[Itinerary]:
+    try:
+        statement = select(Itinerary).where(Itinerary.user_id == user_id)
+        results = db.exec(statement).all()
+        return results
+    except Exception as e:
+        print(e)
+        raise e
+
+
+async def create_itinerary_days(
+    itinerary_id: int, days_data: List[ItineraryDayCreate], db: Session
+) -> List[ItineraryDay]:
+    created_days = []
+    try:
+        for day_data in days_data:
+            new_day = ItineraryDay(
+                itinerary_id=itinerary_id,
+                accommodation_id=day_data.accommodation_id,
+                day_number=day_data.day_number,
+                offline_activity_id=day_data.offline_activity_id,
+                online_activity_id=day_data.online_activity_id,
+            )
+            db.add(new_day)
+            created_days.append(new_day)
         db.commit()
-        db.refresh(itinerary)
+        for day in created_days:
+            db.refresh(day)
+        return created_days
+    except Exception as e:
+        db.rollback()
+        print(e)
+        raise e
 
-        return itinerary
+
+async def get_itinerary_days(itinerary_id: int, db: Session) -> List[ItineraryDay]:
+    try:
+        statement = (
+            select(ItineraryDay)
+            .where(ItineraryDay.itinerary_id == itinerary_id)
+            .order_by(ItineraryDay.day_number)
+        )
+        results = db.exec(statement).all()
+        return results
+    except Exception as e:
+        print(e)
+        raise e
+
+
+async def update_itinerary(
+    itinerary_id: int, itinerary_data: ItineraryUpdate, user_id: int, db: Session
+) -> Optional[dict]:
+    """Update an existing itinerary"""
+    try:
+        # Get the existing itinerary
+        existing_itinerary = await get_itinerary_by_id(itinerary_id, user_id, db)
+        if not existing_itinerary:
+            return None
+
+        # Update fields that are provided
+        update_data = itinerary_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(existing_itinerary, field, value)
+
+        # Update the updated_at timestamp
+        existing_itinerary.updated_at = datetime.datetime.now(datetime.timezone.utc)
+
+        db.add(existing_itinerary)
+        db.commit()
+        db.refresh(existing_itinerary)
+
+        # Return the updated itinerary with days
+        return await get_itinerary_by_id_with_days(itinerary_id, user_id, db)
 
     except Exception as e:
         db.rollback()
+        print(e)
         raise e
 
 
 async def delete_itinerary(itinerary_id: int, user_id: int, db: Session) -> bool:
-    """Delete an itinerary and its associated days and trips."""
+    """Delete an itinerary and all its associated days"""
     try:
+        # Get the itinerary to ensure it exists and belongs to the user
         itinerary = await get_itinerary_by_id(itinerary_id, user_id, db)
         if not itinerary:
             return False
 
-        # Delete associated trips first
-        from app.models.database.trips import Trips
-        from sqlmodel import delete
-
-        # Delete trips associated with this itinerary
-        trip_delete_statement = delete(Trips).where(Trips.itinerary_id == itinerary_id)
-        db.exec(trip_delete_statement)
-
-        # Delete itinerary days associated with this itinerary
-        days_delete_statement = delete(ItineraryDay).where(
+        # Delete all associated itinerary days first
+        days_statement = select(ItineraryDay).where(
             ItineraryDay.itinerary_id == itinerary_id
         )
-        db.exec(days_delete_statement)
+        days = db.exec(days_statement).all()
+        for day in days:
+            db.delete(day)
 
-        # Delete the itinerary itself
+        # Delete the itinerary
         db.delete(itinerary)
         db.commit()
 
@@ -260,70 +213,59 @@ async def delete_itinerary(itinerary_id: int, user_id: int, db: Session) -> bool
 
     except Exception as e:
         db.rollback()
+        print(e)
         raise e
 
 
-async def get_itinerary_for_blockchain(itinerary_id: int, db: Session) -> str:
-    """
-    Get itinerary data in a format suitable for blockchain storage.
-    Returns a JSON string representation of the itinerary for hashing.
-    """
+async def update_itinerary_day(
+    day_id: int, itinerary_id: int, day_data: ItineraryDayUpdate, db: Session
+) -> Optional[ItineraryDay]:
+    """Update a specific itinerary day"""
     try:
-        # Get the itinerary
-        itinerary = db.exec(
-            select(Itinerary).where(Itinerary.id == itinerary_id)
-        ).first()
-        if not itinerary:
-            raise ValueError(f"Itinerary with ID {itinerary_id} not found")
+        # Get the existing day
+        statement = select(ItineraryDay).where(
+            ItineraryDay.id == day_id, ItineraryDay.itinerary_id == itinerary_id
+        )
+        existing_day = db.exec(statement).first()
 
-        # Get all itinerary days
-        itinerary_days = db.exec(
-            select(ItineraryDay)
-            .where(ItineraryDay.itinerary_id == itinerary_id)
-            .order_by(ItineraryDay.day_number)
-        ).all()
+        if not existing_day:
+            return None
 
-        # Create a blockchain-suitable representation
-        blockchain_data = {
-            "itinerary_id": itinerary.id,
-            "user_id": itinerary.user_id,
-            "title": itinerary.title,
-            "destination_city": itinerary.destination_city,
-            "destination_state": itinerary.destination_state,
-            "destination_country": itinerary.destination_country,
-            "start_date": itinerary.start_date.isoformat(),
-            "end_date": itinerary.end_date.isoformat(),
-            "total_duration_days": itinerary.total_duration_days,
-            "itinerary_type": itinerary.itinerary_type,
-            "status": itinerary.status,
-            "number_of_travelers": itinerary.number_of_travelers,
-            "purpose_of_visit": itinerary.purpose_of_visit,
-            "primary_place_id": itinerary.primary_place_id,
-            "trek_id": itinerary.trek_id,
-            "days": [],
-        }
+        # Update fields that are provided
+        update_data = day_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(existing_day, field, value)
 
-        # Add day details
-        for day in itinerary_days:
-            day_data = {
-                "day_number": day.day_number,
-                "date": day.date.isoformat(),
-                "day_type": day.day_type,
-                "primary_place_id": day.primary_place_id,
-                "trek_id": day.trek_id,
-                "planned_activities": day.planned_activities,
-                "accommodation_name": day.accommodation_name,
-                "accommodation_type": day.accommodation_type,
-                "accommodation_address": day.accommodation_address,
-                "transport_mode": day.transport_mode,
-                "safety_notes": day.safety_notes,
-            }
-            blockchain_data["days"].append(day_data)
+        db.add(existing_day)
+        db.commit()
+        db.refresh(existing_day)
 
-        # Return as JSON string for blockchain hashing
-        import json
-
-        return json.dumps(blockchain_data, sort_keys=True)
+        return existing_day
 
     except Exception as e:
+        db.rollback()
+        print(e)
+        raise e
+
+
+async def delete_itinerary_day(day_id: int, itinerary_id: int, db: Session) -> bool:
+    """Delete a specific itinerary day"""
+    try:
+        # Get the day to ensure it exists and belongs to the itinerary
+        statement = select(ItineraryDay).where(
+            ItineraryDay.id == day_id, ItineraryDay.itinerary_id == itinerary_id
+        )
+        day = db.exec(statement).first()
+
+        if not day:
+            return False
+
+        db.delete(day)
+        db.commit()
+
+        return True
+
+    except Exception as e:
+        db.rollback()
+        print(e)
         raise e

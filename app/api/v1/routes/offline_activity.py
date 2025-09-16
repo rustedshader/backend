@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import get_current_admin_user, get_current_user
-from app.models.schemas.treks import OfflineActivityCreate
 from app.models.database.base import get_db
 from app.models.database.user import User
 from app.models.database.offline_activity import OfflineActivity
