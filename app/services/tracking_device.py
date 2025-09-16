@@ -10,12 +10,14 @@ import datetime
 from typing import Optional, Union
 
 
+# TODO: Fix timestamps to datetime
+
+
 async def create_tracking_device(
     device_create_data: TrackingDeviceCreate, db: Session
 ) -> TrackingDevice:
     """Create a new tracking device with a unique API key."""
     try:
-        # Check if device_id already exists
         existing_device = db.exec(
             select(TrackingDevice).where(
                 TrackingDevice.device_id == device_create_data.device_id
@@ -25,10 +27,8 @@ async def create_tracking_device(
         if existing_device:
             raise ValueError("Device with this ID already exists")
 
-        # Generate a unique API key
         api_key = generate_api_key()
 
-        # Create new tracking device
         tracking_device = TrackingDevice(
             device_id=device_create_data.device_id,
             api_key=api_key,

@@ -4,36 +4,9 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from app.models.database.offline_activity import (
-    DifficultyLevelEnum,
-    Trek,
-    TrekRouteData,
-)
-from app.models.database.trips import (
-    Trips,
-    TripStatusEnum,
-    LocationHistory,
-    Alerts,
-    AlertStatusEnum,
-    AlertTypeEnum,
-)
-from app.models.database.guides import (
-    Guides,
-    GuideCertificationLevelEnum,
-    GuideSpecialtyEnum,
-    GuideTrek,
-)
-from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
-from app.models.database.user import User, UserRoleEnum, RefreshToken
-from app.models.database.itinerary import (
-    Itinerary,
-    ItineraryDay,
-    ItineraryStatusEnum,
-    AccommodationTypeEnum,
-    TransportModeEnum,
-)
-from app.models.database.online_activity import Place, PlaceTypeEnum
-from app.models.database.test_coordinates import TestCoordinates
+
+# Import all models to ensure they are registered with SQLModel.metadata
+from app.models.database import *  # This imports all the models
 from app.core.config import settings
 from app.models.database.base import SQLModel
 

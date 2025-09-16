@@ -1,3 +1,4 @@
+# Renamed from places.py
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.models.database.online_activity import OnlineActivityTypeEnum

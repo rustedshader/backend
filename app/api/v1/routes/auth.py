@@ -14,7 +14,6 @@ from app.models.schemas.countries import Countries
 from app.services.auth import (
     create_user,
     authenticate_user,
-    get_user_profile_for_verification,
 )
 from app.api.deps import get_current_user, get_current_active_user
 from app.utils.security import (
@@ -31,11 +30,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/sign-up", response_model=UserCreateResponse)
 async def sign_up(user_create_data: UserCreate, db: Session = Depends(get_db)):
-    if user_create_data.indian_citizenship and not user_create_data.aadhar_number:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aadhar number is required for Indian citizens",
-        )
     if (
         user_create_data.country_code == Countries.INDIA
         and not user_create_data.aadhar_number
@@ -122,35 +116,6 @@ async def protected_route(current_user: User = Depends(get_current_active_user))
         "user_id": current_user.id,
         "user_role": current_user.role.value,
     }
-
-
-@router.get("/my-profile-for-verification")
-async def get_my_profile_for_verification(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Get current user's profile information for verification at entry points.
-    This can be used to generate QR codes or display info to officials.
-    """
-    try:
-        profile = await get_user_profile_for_verification(current_user.id, db)
-        return {
-            **profile,
-            "verification_qr_data": {
-                "user_id": current_user.id,
-                "email": current_user.email,
-                "name": f"{current_user.first_name} {current_user.last_name or ''}".strip(),
-                "status": "ready_for_verification"
-                if not current_user.tourist_id_token
-                else "blockchain_id_issued",
-            },
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve profile for verification",
-        )
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)

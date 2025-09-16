@@ -11,7 +11,6 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     phone_number: str
-    indian_citizenship: bool = False
     aadhar_number: str | None = None
     passport_number: str | None = None
 
@@ -24,7 +23,6 @@ class UserResponse(BaseModel):
     email: str
     country_code: str
     phone_number: str
-    indian_citizenship: bool
     is_kyc_verified: bool
     is_email_verified: bool
     is_active: bool
@@ -82,7 +80,6 @@ class UserVerificationProfile(BaseModel):
     email: str
     country_code: str
     phone_number: str
-    indian_citizenship: bool
     is_kyc_verified: bool
     has_blockchain_id: bool
     blockchain_address: str | None = None

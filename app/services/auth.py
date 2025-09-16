@@ -4,20 +4,17 @@ from app.models.schemas.auth import UserCreate, UserCreateResponse, UserResponse
 from app.utils.security import hash_password, hash_identifier, verify_password
 from app.utils.blockchain import TouristIDClient
 from web3 import Web3
-import hashlib
 import json
 
 
 async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateResponse:
     try:
-        # First, check if user already exists to avoid unnecessary blockchain operations
         existing_user_email = db.exec(
             select(User).where(User.email == user_create_data.email)
         ).first()
         if existing_user_email:
             raise ValueError(f"User with email {user_create_data.email} already exists")
 
-        # Check if phone number already exists
         existing_user_phone = db.exec(
             select(User).where(User.phone_number == user_create_data.phone_number)
         ).first()
@@ -26,7 +23,6 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
                 f"User with phone number {user_create_data.phone_number} already exists"
             )
 
-        # If Aadhar number is provided, check for duplicates
         if user_create_data.aadhar_number:
             aadhar_hash_check = hash_identifier(user_create_data.aadhar_number)
             existing_user_aadhar = db.exec(
@@ -35,7 +31,6 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
             if existing_user_aadhar:
                 raise ValueError("User with this Aadhar number already exists")
 
-        # If passport number is provided, check for duplicates
         if user_create_data.passport_number:
             passport_hash_check = hash_identifier(user_create_data.passport_number)
             existing_user_passport = db.exec(
@@ -44,7 +39,6 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
             if existing_user_passport:
                 raise ValueError("User with this passport number already exists")
 
-        # Now proceed with user creation since all validations passed
         password_hash = hash_password(user_create_data.password)
         aadhar_hash = (
             hash_identifier(user_create_data.aadhar_number)
@@ -57,7 +51,6 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
             else None
         )
 
-        # Create user without blockchain ID - ID will be issued at entry points
         user = User(
             first_name=user_create_data.first_name,
             middle_name=user_create_data.middle_name,
@@ -65,14 +58,10 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
             email=user_create_data.email,
             country_code=user_create_data.country_code.value,
             phone_number=user_create_data.phone_number,
-            indian_citizenship=user_create_data.indian_citizenship,
             aadhar_number_hash=aadhar_hash,
             passport_number_hash=passport_hash,
             password_hash=password_hash,
-            # Blockchain fields will be null until official verification
             blockchain_address=None,
-            tourist_id_token=None,
-            tourist_id_transaction_hash=None,
         )
         db.add(user)
         db.commit()
@@ -86,11 +75,9 @@ async def create_user(user_create_data: UserCreate, db: Session) -> UserCreateRe
             message="Profile created successfully. Blockchain ID will be issued at entry points.",
         )
     except ValueError as ve:
-        # Handle validation errors (duplicate email, phone, etc.)
         db.rollback()
         raise ve
     except Exception as e:
-        # Handle other unexpected errors
         db.rollback()
         raise e
 
@@ -117,10 +104,6 @@ async def issue_blockchain_id_at_entry_point(
         user = db.exec(select(User).where(User.id == user_id)).first()
         if not user:
             raise ValueError("User not found")
-
-        # Check if user already has a blockchain ID
-        if user.tourist_id_token is not None:
-            raise ValueError("User already has a blockchain ID issued")
 
         # Check if user is KYC verified (you might want to add this check)
         if not user.is_kyc_verified:
@@ -193,27 +176,3 @@ async def issue_blockchain_id_at_entry_point(
 
         print(f"❌ Traceback: {traceback.format_exc()}")
         raise e
-
-
-async def get_user_profile_for_verification(user_id: int, db: Session) -> dict:
-    """
-    Get user profile information for official verification at entry points.
-    """
-    user = db.exec(select(User).where(User.id == user_id)).first()
-    if not user:
-        raise ValueError("User not found")
-
-    return {
-        "id": user.id,
-        "first_name": user.first_name,
-        "middle_name": user.middle_name,
-        "last_name": user.last_name,
-        "email": user.email,
-        "country_code": user.country_code,
-        "phone_number": user.phone_number,
-        "indian_citizenship": user.indian_citizenship,
-        "is_kyc_verified": user.is_kyc_verified,
-        "has_blockchain_id": user.tourist_id_token is not None,
-        "blockchain_address": user.blockchain_address,
-        "tourist_id_token": user.tourist_id_token,
-    }

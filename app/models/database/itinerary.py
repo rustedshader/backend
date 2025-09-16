@@ -14,13 +14,11 @@ class Itinerary(SQLModel, table=True):
     destination_state: str = Field(index=True)
     start_date: datetime.date = Field(index=True)
     end_date: datetime.date = Field(index=True)
-    total_duration_days: int = Field(
-        index=True
-    )  # Derived attribute from start_date and end_date
-    created_at: datetime = Field(
+    total_duration_days: int = Field(index=True)
+    created_at: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
-    updated_at: datetime = Field(
+    updated_at: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc), index=True
     )
 
@@ -34,6 +32,4 @@ class ItineraryDay(SQLModel, table=True):
         default=None, foreign_key="accommodations.id", index=True
     )
     day_number: int = Field(index=True)
-    trek_id: Optional[int] = Field(
-        default=None, foreign_key="offline_activities.id", index=True
-    )
+    trek_id: Optional[int] = Field(default=None, foreign_key="treks.id", index=True)

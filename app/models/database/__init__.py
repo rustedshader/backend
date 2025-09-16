@@ -6,18 +6,9 @@ from .tracking_device import TrackingDevice, TrackingDeviceStatusEnum
 from .trips import (
     Trips,
     TripStatusEnum,
-    TripTypeEnum,
-    LocationSourceEnum,
-    TrekPhaseEnum,
-    TourPhaseEnum,
-    TrekPath,
-    RouteSegment,
-    LocationHistory,
-    Alerts,
-    AlertTypeEnum,
-    AlertStatusEnum,
 )
-from .itinerary import Itinerary, ItineraryDay, ItineraryStatusEnum, ItineraryTypeEnum
+from .location_history import LocationHistory
+from .itinerary import Itinerary, ItineraryDay
 from .geofencing import (
     RestrictedAreas,
     GeofenceViolations,
@@ -48,21 +39,10 @@ __all__ = [
     # Trip models
     "Trips",
     "TripStatusEnum",
-    "TripTypeEnum",
-    "LocationSourceEnum",
-    "TrekPhaseEnum",
-    "TourPhaseEnum",
-    "TrekPath",
-    "RouteSegment",
     "LocationHistory",
-    "Alerts",
-    "AlertTypeEnum",
-    "AlertStatusEnum",
     # Itinerary models
     "Itinerary",
     "ItineraryDay",
-    "ItineraryStatusEnum",
-    "ItineraryTypeEnum",
     # Geofencing models
     "RestrictedAreas",
     "GeofenceViolations",
