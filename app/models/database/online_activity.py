@@ -6,7 +6,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import Column
 
 
-class PlaceTypeEnum(str, PyEnum):
+class OnlineActivityTypeEnum(str, PyEnum):
     HISTORICAL_SITE = "historical_site"
     TEMPLE = "temple"
     MUSEUM = "museum"
@@ -18,7 +18,7 @@ class PlaceTypeEnum(str, PyEnum):
     NIGHTLIFE = "nightlife"
 
 
-class Place(SQLModel, table=True):
+class OnlineActivity(SQLModel, table=True):
     __tablename__ = "places"
 
     model_config = {"arbitrary_types_allowed": True}
@@ -26,7 +26,7 @@ class Place(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True, index=True)
     name: str = Field(index=True)
     description: Optional[str] = Field(default=None)
-    place_type: PlaceTypeEnum = Field(index=True)
+    place_type: OnlineActivityTypeEnum = Field(index=True)
     city: str = Field(index=True)
     state: str = Field(index=True)
     address: Optional[str] = Field(default=None)

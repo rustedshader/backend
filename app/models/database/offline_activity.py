@@ -13,7 +13,7 @@ class DifficultyLevelEnum(str, PyEnum):
     HARD = "hard"
 
 
-class Trek(SQLModel, table=True):
+class OfflineActivity(SQLModel, table=True):
     __tablename__ = "treks"
 
     model_config = {"arbitrary_types_allowed": True}
@@ -44,7 +44,7 @@ class Trek(SQLModel, table=True):
     )
 
 
-class TrekRouteData(SQLModel, table=True):
+class OfflineActivityRouteData(SQLModel, table=True):
     __tablename__ = "trek_routes"
 
     model_config = {"arbitrary_types_allowed": True}
