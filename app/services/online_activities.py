@@ -1,11 +1,12 @@
 from sqlmodel import Session, select
 from app.models.database.online_activity import OnlineActivity
-from typing import Optional
+from typing import Optional, List, Tuple
 import datetime
 import math
 from app.models.schemas.online_activity import (
     OnlineActivityCreate,
     OnlineActivityUpdate,
+    OnlineActivitySearchQuery,
 )
 
 
@@ -105,3 +106,141 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     r = 6371
 
     return c * r
+
+
+async def search_online_activities(
+    search_query: OnlineActivitySearchQuery,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = None,
+) -> Tuple[List[OnlineActivity], int]:
+    """Search online activities with filtering and pagination."""
+    try:
+        statement = select(OnlineActivity).where(OnlineActivity.is_active)
+
+        # Apply filters
+        if search_query.city:
+            statement = statement.where(
+                OnlineActivity.city.ilike(f"%{search_query.city}%")
+            )
+
+        if search_query.state:
+            statement = statement.where(
+                OnlineActivity.state.ilike(f"%{search_query.state}%")
+            )
+
+        if search_query.activity_type:
+            statement = statement.where(
+                OnlineActivity.activity_type.ilike(f"%{search_query.activity_type}%")
+            )
+
+        if search_query.is_featured is not None:
+            statement = statement.where(
+                OnlineActivity.is_featured == search_query.is_featured
+            )
+
+        # Get total count
+        count_statement = statement
+        total_count = len(db.exec(count_statement).all())
+
+        # Apply pagination
+        offset = (page - 1) * page_size
+        statement = statement.offset(offset).limit(page_size)
+
+        activities = db.exec(statement).all()
+        return list(activities), total_count
+
+    except Exception as e:
+        raise e
+
+
+async def get_featured_online_activities(
+    db: Session, limit: int = 10
+) -> List[OnlineActivity]:
+    """Get featured online activities."""
+    try:
+        statement = (
+            select(OnlineActivity)
+            .where(OnlineActivity.is_active, OnlineActivity.is_featured)
+            .limit(limit)
+        )
+
+        activities = db.exec(statement).all()
+        return list(activities)
+
+    except Exception as e:
+        raise e
+
+
+async def get_nearby_online_activities(
+    latitude: float, longitude: float, radius_km: float, db: Session, limit: int = 20
+) -> List[OnlineActivity]:
+    """Get online activities within a radius of given coordinates."""
+    try:
+        # Get all active activities
+        statement = select(OnlineActivity).where(OnlineActivity.is_active)
+        all_activities = db.exec(statement).all()
+
+        # Filter by distance
+        nearby_activities = []
+        for activity in all_activities:
+            if activity.latitude is not None and activity.longitude is not None:
+                distance = calculate_distance(
+                    latitude,
+                    longitude,
+                    float(activity.latitude),
+                    float(activity.longitude),
+                )
+                if distance <= radius_km:
+                    nearby_activities.append(activity)
+
+        # Sort by distance and limit
+        nearby_activities.sort(
+            key=lambda a: calculate_distance(
+                latitude, longitude, float(a.latitude), float(a.longitude)
+            )
+        )
+
+        return nearby_activities[:limit]
+
+    except Exception as e:
+        raise e
+
+
+async def get_online_activities_by_type(
+    activity_type: str, db: Session, limit: int = 20
+) -> List[OnlineActivity]:
+    """Get online activities by type."""
+    try:
+        statement = (
+            select(OnlineActivity)
+            .where(
+                OnlineActivity.is_active,
+                OnlineActivity.activity_type.ilike(f"%{activity_type}%"),
+            )
+            .limit(limit)
+        )
+
+        activities = db.exec(statement).all()
+        return list(activities)
+
+    except Exception as e:
+        raise e
+
+
+async def get_online_activities_by_city(
+    city: str, db: Session, limit: int = 20
+) -> List[OnlineActivity]:
+    """Get online activities by city."""
+    try:
+        statement = (
+            select(OnlineActivity)
+            .where(OnlineActivity.is_active, OnlineActivity.city.ilike(f"%{city}%"))
+            .limit(limit)
+        )
+
+        activities = db.exec(statement).all()
+        return list(activities)
+
+    except Exception as e:
+        raise e

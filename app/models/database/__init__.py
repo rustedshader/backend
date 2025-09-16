@@ -1,7 +1,11 @@
 from .user import User, UserRoleEnum, RefreshToken
 from .guides import Guides, GuideCertificationLevelEnum, GuideSpecialtyEnum
-from .online_activity import Place, PlaceTypeEnum
-from .offline_activity import Trek, TrekRouteData, DifficultyLevelEnum
+from .online_activity import OnlineActivity, OnlineActivityTypeEnum
+from .offline_activity import (
+    OfflineActivity,
+    OfflineActivityRouteData,
+    DifficultyLevelEnum,
+)
 from .tracking_device import TrackingDevice, TrackingDeviceStatusEnum
 from .trips import (
     Trips,
@@ -26,12 +30,12 @@ __all__ = [
     "Guides",
     "GuideCertificationLevelEnum",
     "GuideSpecialtyEnum",
-    # Place models
-    "Place",
-    "PlaceTypeEnum",
-    # Trek models
-    "Trek",
-    "TrekRouteData",
+    # Online Activity models
+    "OnlineActivity",
+    "OnlineActivityTypeEnum",
+    # Offline Activity models
+    "OfflineActivity",
+    "OfflineActivityRouteData",
     "DifficultyLevelEnum",
     # Tracking device models
     "TrackingDevice",

@@ -33,6 +33,8 @@ class OnlineActivity(SQLModel, table=True):
     location: Any = Field(
         sa_column=Column(Geometry(geometry_type="POINT", srid=4326), index=True)
     )
+    latitude: Optional[float] = Field(default=None, index=True)
+    longitude: Optional[float] = Field(default=None, index=True)
     cost_per_person: Optional[float] = Field(default=None, index=True)
     wheelchair_accessible: bool = Field(default=False)
     safety_rating: Optional[int] = Field(default=None, ge=1, le=5)

@@ -12,9 +12,12 @@ from app.services.offline_activities import (
     get_offline_activities_by_state,
     get_geojson_route_data,
     delete_offline_activity,
+    update_offline_activity,
     update_offline_activity_route_data,
 )
 from app.models.schemas.offline_activity import (
+    OfflineActivityCreate,
+    OfflineActivityUpdate,
     OfflineActivityDataResponse,
     OfflineActivityDataUpdate,
 )
@@ -76,17 +79,13 @@ async def get_offline_activity_by_state(
         ) from e
 
 
-@router.post("create-offline-activity", response_model=OfflineActivity)
+@router.post("/", response_model=OfflineActivity, status_code=status.HTTP_201_CREATED)
 async def create_offline_activity_endpoint(
+    offline_activity_create: OfflineActivityCreate,
     admin_user: User = Depends(get_current_admin_user),
-    offline_activity_create: OfflineActivityCreate = None,
     db: Session = Depends(get_db),
 ):
-    if offline_activity_create is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Offline Activity Create data is required",
-        )
+    """Create a new offline activity (admin only)."""
     try:
         offline_activity = await create_offline_activity(
             created_by_id=admin_user.id,
@@ -100,6 +99,53 @@ async def create_offline_activity_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create offline activity",
+        ) from e
+
+
+@router.put("/{offline_activity_id}", response_model=OfflineActivity)
+async def update_offline_activity_endpoint(
+    offline_activity_id: int,
+    offline_activity_update: OfflineActivityUpdate,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Update an existing offline activity (admin only)."""
+    try:
+        # Check if activity exists
+        existing_activity = await get_offline_activity_by_id(offline_activity_id, db)
+        if not existing_activity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offline activity not found",
+            )
+
+        # Check if admin created this activity
+        if existing_activity.created_by != admin_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update activities that you created",
+            )
+
+        updated_activity = await update_offline_activity(
+            activity_id=offline_activity_id,
+            activity_update_data=offline_activity_update,
+            db=db,
+        )
+
+        if not updated_activity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offline activity not found",
+            )
+
+        return updated_activity
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update offline activity",
         ) from e
 
 
@@ -125,26 +171,45 @@ async def get_offline_activity_information(
         ) from e
 
 
-# This data would be list of cordinates format (Later)
-@router.post("/add-offline-activity-route", response_model=OfflineActivityDataResponse)
-async def add_treck_data(
+# This data would be list of coordinates format
+@router.post("/route-data", response_model=OfflineActivityDataResponse)
+async def add_offline_activity_route_data(
     offline_activity_route_data: OfflineActivityDataUpdate,
-    admin_user=Depends(get_current_admin_user),
+    admin_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
+    """Add or update route data for an offline activity (admin only)."""
     try:
+        # Check if activity exists
+        activity = await get_offline_activity_by_id(
+            offline_activity_route_data.offline_activity_id, db
+        )
+        if not activity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offline activity not found",
+            )
+
+        # Check if admin created this activity
+        if activity.created_by != admin_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update route data for activities that you created",
+            )
+
         offline_activity_route = await update_offline_activity_route_data(
             offline_activity_route_data, db
         )
         if not offline_activity_route:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offline activity not found",
             )
 
         return OfflineActivityDataResponse(
             offline_activity_id=offline_activity_route.id,
-            created_at=offline_activity_route.created_at,
-            updated_at=offline_activity_route.updated_at,
+            created_at=int(offline_activity_route.created_at.timestamp()),
+            updated_at=int(offline_activity_route.updated_at.timestamp()),
         )
     except HTTPException:
         raise
@@ -152,7 +217,7 @@ async def add_treck_data(
         print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to add trek data",
+            detail="Failed to add offline activity route data",
         ) from e
 
 
@@ -162,49 +227,67 @@ async def get_offline_activity_route(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Get route data (GeoJSON) for a specific offline activity."""
     try:
+        # Check if activity exists
+        activity = await get_offline_activity_by_id(offline_activity_id, db)
+        if not activity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offline activity not found",
+            )
+
         geojson_data = await get_geojson_route_data(offline_activity_id, db)
+        if not geojson_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Route data not found for this activity",
+            )
+
         return geojson_data
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch trek route data",
-        ) from e
-
-
-@router.delete("/{offline_activity_id}")
-async def delete_offline_activity_endpoint(
-    offline_activity_id: int,
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
-    try:
-        existing_trek = await get_offline_activity_by_id(offline_activity_id, db)
-        if not existing_trek:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Trek not found"
-            )
-
-        if existing_trek.created_by != admin_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only delete treks that you created",
-            )
-
-        success = await delete_offline_activity(offline_activity_id, db)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete trek",
-            )
-
-        return {"message": "Trek deleted successfully", "trek_id": offline_activity_id}
     except HTTPException:
         raise
     except Exception as e:
         print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete trek",
+            detail="Failed to fetch offline activity route data",
+        ) from e
+
+
+@router.delete("/{offline_activity_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_offline_activity_endpoint(
+    offline_activity_id: int,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an offline activity (admin only)."""
+    try:
+        existing_activity = await get_offline_activity_by_id(offline_activity_id, db)
+        if not existing_activity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offline activity not found",
+            )
+
+        if existing_activity.created_by != admin_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete activities that you created",
+            )
+
+        success = await delete_offline_activity(offline_activity_id, db)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete offline activity",
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete offline activity",
         ) from e

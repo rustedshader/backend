@@ -164,7 +164,7 @@ async def get_online_activity(
     """Get a specific online activity by ID."""
     try:
         activity = await online_activity_service.get_online_activity_by_id(
-            activity_id=activity_id, db=db
+            online_activity_id=activity_id, db=db
         )
 
         if not activity:
@@ -198,7 +198,7 @@ async def create_online_activity(
     """Create a new online activity (admin only)."""
     try:
         activity = await online_activity_service.create_online_activity(
-            activity_data=activity_data, admin_id=current_admin.id, db=db
+            online_activity_data=activity_data, admin_id=current_admin.id, db=db
         )
 
         return OnlineActivityResponse.model_validate(activity)
@@ -220,7 +220,7 @@ async def update_online_activity(
     """Update an online activity (admin only)."""
     try:
         activity = await online_activity_service.update_online_activity(
-            activity_id=activity_id, update_data=update_data, db=db
+            online_activity_id=activity_id, update_data=update_data, db=db
         )
 
         if not activity:
@@ -249,7 +249,7 @@ async def delete_online_activity(
     """Delete an online activity (admin only)."""
     try:
         success = await online_activity_service.delete_online_activity(
-            activity_id=activity_id, db=db
+            online_activity_id=activity_id, db=db
         )
 
         if not success:

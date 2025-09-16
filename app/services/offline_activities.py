@@ -43,7 +43,7 @@ async def get_all_offline_activities(db: Session) -> List[OfflineActivity]:
     """Get all offline activities from the database."""
     statement = select(OfflineActivity)
     activities = db.exec(statement).all()
-    return List(activities)
+    return list(activities)
 
 
 async def get_offline_activities_by_difficulty(
@@ -54,7 +54,7 @@ async def get_offline_activities_by_difficulty(
         OfflineActivity.difficulty_level == difficulty
     )
     activities = db.exec(statement).all()
-    return List(activities)
+    return list(activities)
 
 
 async def get_offline_activities_by_state(
@@ -63,7 +63,7 @@ async def get_offline_activities_by_state(
     """Get offline activities filtered by state."""
     statement = select(OfflineActivity).where(OfflineActivity.state.ilike(f"%{state}%"))
     activities = db.exec(statement).all()
-    return List(activities)
+    return list(activities)
 
 
 async def update_offline_activity(
