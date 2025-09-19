@@ -1,29 +1,25 @@
 from .user import User, UserRoleEnum, RefreshToken
-from .guides import Guides, GuideCertificationLevelEnum, GuideSpecialtyEnum
-from .places import Place, PlaceTypeEnum
-from .treks import Trek, TrekRouteData, DifficultyLevelEnum
-from .tracking_device import TrackingDevice, TrackingDeviceStatusEnum
+from .guides import Guides
+from .online_activity import OnlineActivity, OnlineActivityTypeEnum
+from .offline_activity import (
+    OfflineActivity,
+    OfflineActivityRouteData,
+    DifficultyLevelEnum,
+)
+from .tracking_device import TrackingDevice
 from .trips import (
     Trips,
     TripStatusEnum,
-    TripTypeEnum,
-    LocationSourceEnum,
-    TrekPhaseEnum,
-    TourPhaseEnum,
-    TrekPath,
-    RouteSegment,
-    LocationHistory,
-    Alerts,
-    AlertTypeEnum,
-    AlertStatusEnum,
 )
-from .itinerary import Itinerary, ItineraryDay, ItineraryStatusEnum, ItineraryTypeEnum
+from .location_history import LocationHistory
+from .itinerary import Itinerary, ItineraryDay
 from .geofencing import (
     RestrictedAreas,
     GeofenceViolations,
     RestrictedAreaStatusEnum,
     RestrictedAreaTypeEnum,
 )
+from .accommodation import Accommodation
 
 __all__ = [
     # User models
@@ -32,39 +28,26 @@ __all__ = [
     "RefreshToken",
     # Guide models
     "Guides",
-    "GuideCertificationLevelEnum",
-    "GuideSpecialtyEnum",
-    # Place models
-    "Place",
-    "PlaceTypeEnum",
-    # Trek models
-    "Trek",
-    "TrekRouteData",
+    # Online Activity models
+    "OnlineActivity",
+    "OnlineActivityTypeEnum",
+    # Offline Activity models
+    "OfflineActivity",
+    "OfflineActivityRouteData",
     "DifficultyLevelEnum",
     # Tracking device models
     "TrackingDevice",
-    "TrackingDeviceStatusEnum",
     # Trip models
     "Trips",
     "TripStatusEnum",
-    "TripTypeEnum",
-    "LocationSourceEnum",
-    "TrekPhaseEnum",
-    "TourPhaseEnum",
-    "TrekPath",
-    "RouteSegment",
     "LocationHistory",
-    "Alerts",
-    "AlertTypeEnum",
-    "AlertStatusEnum",
     # Itinerary models
     "Itinerary",
     "ItineraryDay",
-    "ItineraryStatusEnum",
-    "ItineraryTypeEnum",
     # Geofencing models
     "RestrictedAreas",
     "GeofenceViolations",
     "RestrictedAreaStatusEnum",
     "RestrictedAreaTypeEnum",
+    "Accommodation",
 ]

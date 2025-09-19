@@ -1,71 +1,24 @@
-"""
-Schemas for routing API endpoints.
-"""
-
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-from enum import Enum
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
 
 
-class RouteProfileEnum(str, Enum):
-    CAR = "car"
-    FOOT = "foot"
-    BIKE = "bike"
+class RoutingTestRequest(BaseModel):
+    start_lat: float = Field(..., description="Starting latitude", ge=-90, le=90)
+    start_lon: float = Field(..., description="Starting longitude", ge=-180, le=180)
+    end_lat: float = Field(..., description="Ending latitude", ge=-90, le=90)
+    end_lon: float = Field(..., description="Ending longitude", ge=-180, le=180)
+    profile: str = Field(default="car", description="Transportation profile")
 
 
-class RoutePoint(BaseModel):
-    """A point with coordinates and optional metadata."""
-
-    latitude: float
-    longitude: float
-    name: Optional[str] = None
-    type: Optional[str] = None  # "hotel", "place", "trek_start", etc.
+class GeoJSONGeometry(BaseModel):
+    type: str
+    coordinates: List[List[float]]
 
 
-class RouteSegment(BaseModel):
-    """A route segment between two points."""
-
-    from_point: RoutePoint
-    to_point: RoutePoint
-    distance_meters: float
-    distance_km: float
-    time_seconds: int
-    time_minutes: float
-    time_hours: float
-    geojson: Optional[Dict[str, Any]] = None  # Direct GeoJSON for easy integration
-    coordinates: List[List[float]]  # Raw coordinates for backward compatibility
-    instructions: List[Dict[str, Any]]
-    bbox: List[float]
-    segment_type: Optional[str] = None  # "outbound", "return", "transfer"
-
-
-class ItineraryRouteRequest(BaseModel):
-    """Request to generate routes for an itinerary."""
-
-    itinerary_id: int
-    profile: RouteProfileEnum = RouteProfileEnum.CAR
-    include_coordinates: bool = True
-    include_instructions: bool = True
-
-
-class DayRoute(BaseModel):
-    """Routes for a specific day of the itinerary."""
-
-    day_number: int
-    date: str
-    day_type: str
-    routes: List[RouteSegment]
-    total_distance_km: float
-    total_time_hours: float
-    waypoints: List[RoutePoint]
-
-
-class ItineraryRouteResponse(BaseModel):
-    """Response containing all routes for an itinerary."""
-
-    itinerary_id: int
-    total_days: int
-    total_distance_km: float
-    total_time_hours: float
-    profile: str
-    day_routes: List[DayRoute]
+class RoutingTestResponse(BaseModel):
+    geojson: Dict[str, Any]
+    route_summary: Dict[str, Any]
+    blocked_areas_count: int
+    blocked_areas: List[str]
+    request_details: Dict[str, Any]
+    debug_info: Optional[Dict[str, Any]] = None

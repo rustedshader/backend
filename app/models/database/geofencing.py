@@ -37,7 +37,6 @@ class RestrictedAreas(SQLModel, table=True):
         default=RestrictedAreaStatusEnum.ACTIVE, index=True
     )
 
-    # Geographic polygon boundary - using POLYGON geometry type
     boundary: Any = Field(
         sa_column=Column(
             Geometry(
@@ -51,7 +50,6 @@ class RestrictedAreas(SQLModel, table=True):
         description="Polygon boundary of the restricted area",
     )
 
-    # Administrative details
     created_by_admin_id: int = Field(
         foreign_key="users.id",
         index=True,
@@ -61,7 +59,6 @@ class RestrictedAreas(SQLModel, table=True):
         default=1, ge=1, le=5, description="Severity level from 1 (low) to 5 (high)"
     )
 
-    # Additional metadata
     restriction_reason: Optional[str] = Field(
         default=None, description="Detailed reason for restriction"
     )
@@ -75,7 +72,6 @@ class RestrictedAreas(SQLModel, table=True):
         default=None, description="When the restriction expires (null = permanent)"
     )
 
-    # Timestamps
     created_at: datetime.datetime = Field(
         default_factory=datetime.datetime.utcnow,
         index=True,
@@ -87,7 +83,6 @@ class RestrictedAreas(SQLModel, table=True):
         description="When this restricted area was last updated",
     )
 
-    # Enforcement options
     send_warning_notification: bool = Field(
         default=True, description="Send warning when tourists approach this area"
     )
@@ -107,7 +102,6 @@ class GeofenceViolations(SQLModel, table=True):
     restricted_area_id: int = Field(foreign_key="restricted_areas.id", index=True)
     trip_id: Optional[int] = Field(foreign_key="trips.id", index=True)
 
-    # Violation details
     violation_type: str = Field(
         index=True,
         description="Type of violation: 'entry', 'approach_warning', 'prolonged_stay'",
@@ -124,18 +118,14 @@ class GeofenceViolations(SQLModel, table=True):
         ),
         description="Exact location where violation occurred",
     )
-
-    # Timestamps
     detected_at: datetime.datetime = Field(
-        default_factory=datetime.datetime.utcnow,
+        default_factory=datetime.datetime.now(datetime.timezone.utc),
         index=True,
         description="When the violation was detected",
     )
     resolved_at: Optional[datetime.datetime] = Field(
         default=None, description="When the violation was resolved"
     )
-
-    # Response details
     notification_sent: bool = Field(
         default=False, description="Whether notification was sent to user"
     )
@@ -145,8 +135,6 @@ class GeofenceViolations(SQLModel, table=True):
     severity_score: int = Field(
         default=1, ge=1, le=5, description="Calculated severity score"
     )
-
-    # Additional context
     notes: Optional[str] = Field(
         default=None, description="Additional notes about the violation"
     )

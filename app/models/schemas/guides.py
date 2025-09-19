@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from app.models.database.treks import DifficultyLevelEnum
+from app.models.database.offline_activity import DifficultyLevelEnum
 from typing import Optional
 
 
