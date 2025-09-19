@@ -269,3 +269,51 @@ async def delete_itinerary_day(day_id: int, itinerary_id: int, db: Session) -> b
         db.rollback()
         print(e)
         raise e
+
+
+async def get_itinerary_for_blockchain(itinerary_id: int, db: Session) -> str:
+    """
+    Get itinerary data formatted for blockchain hashing.
+    Returns a JSON string representation of the itinerary and its days.
+    """
+    try:
+        import json
+
+        # Get the itinerary
+        statement = select(Itinerary).where(Itinerary.id == itinerary_id)
+        itinerary = db.exec(statement).first()
+        if not itinerary:
+            raise ValueError(f"Itinerary with id {itinerary_id} not found")
+
+        # Get the itinerary days
+        days = await get_itinerary_days(itinerary_id, db)
+
+        # Create blockchain-ready data structure
+        blockchain_data = {
+            "itinerary_id": itinerary.id,
+            "title": itinerary.title,
+            "description": itinerary.description,
+            "destination_city": itinerary.destination_city,
+            "destination_state": itinerary.destination_state,
+            "start_date": itinerary.start_date.isoformat()
+            if itinerary.start_date
+            else None,
+            "end_date": itinerary.end_date.isoformat() if itinerary.end_date else None,
+            "total_duration_days": itinerary.total_duration_days,
+            "days": [
+                {
+                    "day_number": day.day_number,
+                    "accommodation_id": day.accommodation_id,
+                    "offline_activity_id": day.offline_activity_id,
+                    "online_activity_id": day.online_activity_id,
+                }
+                for day in days
+            ],
+        }
+
+        # Return JSON string with consistent ordering for hashing
+        return json.dumps(blockchain_data, sort_keys=True)
+
+    except Exception as e:
+        print(f"Error in get_itinerary_for_blockchain: {e}")
+        raise e

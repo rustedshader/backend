@@ -21,6 +21,7 @@ async def issue_blockchain_id_at_entry_point(
     """
     Issue blockchain ID to a tourist at an entry point by an authorized official.
     This should only be called after physical verification of documents.
+    Automatically sets KYC verified to true when blockchain ID is issued.
     """
     try:
         from app.services import itinerary as itinerary_service
@@ -30,14 +31,15 @@ async def issue_blockchain_id_at_entry_point(
         if not user:
             raise ValueError("User not found")
 
-        # Check if user is KYC verified (you might want to add this check)
-        if not user.is_kyc_verified:
-            raise ValueError("User KYC must be verified before issuing blockchain ID")
+        # KYC verification will be automatically set when blockchain ID is issued
 
         # Get itinerary data for blockchain
         itinerary_data = await itinerary_service.get_itinerary_for_blockchain(
             itinerary_id=itinerary_id, db=db
         )
+
+        if not itinerary_data or itinerary_data.strip() == "":
+            raise ValueError(f"Invalid itinerary data for itinerary_id {itinerary_id}")
 
         # Create blockchain account for the user
         web3 = Web3()
@@ -45,24 +47,52 @@ async def issue_blockchain_id_at_entry_point(
         userblockchain_account_address = userblockchain_account.address
         userblockchain_account_private_key = userblockchain_account.key.hex()
 
+        # Validate blockchain address
+        if not userblockchain_account_address or not web3.is_address(
+            userblockchain_account_address
+        ):
+            raise ValueError("Failed to generate valid blockchain address")
+
         # Initialize blockchain client and issue tourist ID
+        # Validate blockchain configuration first
+        from app.core.config import settings
+
+        if (
+            not settings.owner_address
+            or not settings.private_key
+            or not settings.contract_address
+        ):
+            raise ValueError(
+                "Blockchain configuration missing. Please set OWNER_ADDRESS, PRIVATE_KEY, and CONTRACT_ADDRESS environment variables."
+            )
+
         blockchain_client = TouristIDClient()
 
-        # Create KYC hash from user data
+        # Create KYC hash from user data - handle None values
         kyc_data = {
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "email": user.email,
-            "country_code": user.country_code,
-            "aadhar_hash": user.aadhar_number_hash,
-            "passport_hash": user.passport_number_hash,
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "email": user.email or "",
+            "country_code": user.country_code or "",
+            "aadhar_hash": user.aadhar_number_hash or "",
+            "passport_hash": user.passport_number_hash or "",
             "verified_by_official": official_id,
         }
         kyc_json = json.dumps(kyc_data, sort_keys=True)
+        if not kyc_json or kyc_json.strip() == "":
+            raise ValueError("Invalid KYC data - cannot generate hash")
+
         kyc_hash = blockchain_client.bytes32_from_text(kyc_json)
+        if not kyc_hash:
+            raise ValueError("Failed to generate KYC hash")
 
         # Create itinerary hash
+        if not itinerary_data or itinerary_data.strip() == "":
+            raise ValueError("Invalid itinerary data - cannot generate hash")
+
         itinerary_hash = blockchain_client.bytes32_from_text(itinerary_data)
+        if not itinerary_hash:
+            raise ValueError("Failed to generate itinerary hash")
 
         # Issue tourist ID with specified validity
         validity_seconds = validity_days * 24 * 3600
@@ -74,8 +104,11 @@ async def issue_blockchain_id_at_entry_point(
             validity_seconds=validity_seconds,
         )
 
-        # Update user with blockchain information
+        # Update user with blockchain information and automatically verify KYC
         user.blockchain_address = userblockchain_account_address
+        user.is_kyc_verified = (
+            True  # Automatically verify KYC when blockchain ID is issued
+        )
 
         # Create a new trip for this tourist ID
         new_trip = Trips(
@@ -94,7 +127,7 @@ async def issue_blockchain_id_at_entry_point(
 
         return {
             "success": True,
-            "message": "Blockchain ID issued successfully and trip started",
+            "message": "Blockchain ID issued successfully, KYC verified, and trip started",
             "tourist_id_token": token_id,
             "trip_id": new_trip.id,
             "trip_status": new_trip.status.value,
@@ -124,6 +157,7 @@ async def issue_blockchain_id(
     Issue blockchain ID to a tourist at entry point.
     This should only be called after physical verification of documents.
     Only authorized officials can call this endpoint.
+    Automatically sets KYC verified to true when blockchain ID is issued.
     """
     try:
         result = await issue_blockchain_id_at_entry_point(
