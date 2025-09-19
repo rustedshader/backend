@@ -13,7 +13,7 @@ class DifficultyLevelEnum(str, PyEnum):
 
 
 class OfflineActivity(SQLModel, table=True):
-    __tablename__ = "treks"
+    __tablename__ = "offline_activities"
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -50,10 +50,16 @@ class OfflineActivity(SQLModel, table=True):
 
 
 class OfflineActivityRouteData(SQLModel, table=True):
-    __tablename__ = "trek_route_data"
+    __tablename__ = "offline_activity_route_data"
+
+    model_config = {"arbitrary_types_allowed": True}
 
     id: int = Field(default=None, primary_key=True, index=True)
-    trek_id: int = Field(foreign_key="treks.id", index=True)
+    offline_activity_id: int = Field(foreign_key="offline_activities.id", index=True)
+    route: Any = Field(
+        sa_column=Column(Geometry(geometry_type="LINESTRING", srid=4326), index=True),
+        default=None,
+    )
     route_data: Optional[str] = Field(default=None)  # Store route as JSON string
     created_at: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc), index=True

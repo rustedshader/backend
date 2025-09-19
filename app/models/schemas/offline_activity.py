@@ -7,7 +7,8 @@ from typing import Optional, List, Tuple
 class OfflineActivityCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    location: str
+    latitude: float
+    longitude: float
     city: str
     district: str
     state: str

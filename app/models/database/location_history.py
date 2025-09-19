@@ -1,5 +1,5 @@
 from sqlmodel import Field, SQLModel
-from typing import Optional, Any
+from typing import Any
 import datetime
 from geoalchemy2 import Geometry
 from sqlalchemy import Column

@@ -13,19 +13,41 @@ from app.models.database.offline_activity import (
     OfflineActivity,
     OfflineActivityRouteData,
 )
-from typing import List
+from typing import List, Dict, Any
+
+
+def _serialize_geometry_to_lat_lng(activity: OfflineActivity) -> Dict[str, Any]:
+    """Convert OfflineActivity with geometry to dict with latitude/longitude."""
+    activity_data = activity.dict()
+    if hasattr(activity, "location") and activity.location:
+        try:
+            point = to_shape(activity.location)
+            activity_data["latitude"] = point.y
+            activity_data["longitude"] = point.x
+            activity_data.pop("location", None)
+        except Exception:
+            activity_data["latitude"] = None
+            activity_data["longitude"] = None
+            activity_data.pop("location", None)
+    return activity_data
 
 
 async def create_offline_activity(
     created_by_id: int, offline_activity_create_data: OfflineActivityCreate, db: Session
-) -> OfflineActivity:
+) -> Dict[str, Any]:
     try:
-        new_activity = OfflineActivity(**offline_activity_create_data.model_dump())
+        data = offline_activity_create_data.model_dump()
+        latitude = data.pop("latitude")
+        longitude = data.pop("longitude")
+        # WKT format: POINT(longitude latitude)
+        wkt_point = f"POINT({longitude} {latitude})"
+        data["location"] = wkt_point
+        new_activity = OfflineActivity(**data)
         new_activity.created_by = created_by_id
         db.add(new_activity)
         db.commit()
         db.refresh(new_activity)
-        return new_activity
+        return _serialize_geometry_to_lat_lng(new_activity)
     except Exception as e:
         db.rollback()
         raise e
@@ -33,42 +55,53 @@ async def create_offline_activity(
 
 async def get_offline_activity_by_id(
     activity_id: int, db: Session
+) -> Dict[str, Any] | None:
+    statement = select(OfflineActivity).where(OfflineActivity.id == activity_id)
+    activity = db.exec(statement).first()
+    if not activity:
+        return None
+    return _serialize_geometry_to_lat_lng(activity)
+
+
+async def _get_offline_activity_raw_by_id(
+    activity_id: int, db: Session
 ) -> OfflineActivity | None:
+    """Get raw OfflineActivity object without serialization - for internal use only."""
     statement = select(OfflineActivity).where(OfflineActivity.id == activity_id)
     activity = db.exec(statement).first()
     return activity
 
 
-async def get_all_offline_activities(db: Session) -> List[OfflineActivity]:
+async def get_all_offline_activities(db: Session) -> List[Dict[str, Any]]:
     """Get all offline activities from the database."""
     statement = select(OfflineActivity)
     activities = db.exec(statement).all()
-    return list(activities)
+    return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
 
 async def get_offline_activities_by_difficulty(
     difficulty: str, db: Session
-) -> List[OfflineActivity]:
+) -> List[Dict[str, Any]]:
     """Get offline activities filtered by difficulty level."""
     statement = select(OfflineActivity).where(
         OfflineActivity.difficulty_level == difficulty
     )
     activities = db.exec(statement).all()
-    return list(activities)
+    return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
 
 async def get_offline_activities_by_state(
     state: str, db: Session
-) -> List[OfflineActivity]:
+) -> List[Dict[str, Any]]:
     """Get offline activities filtered by state."""
     statement = select(OfflineActivity).where(OfflineActivity.state.ilike(f"%{state}%"))
     activities = db.exec(statement).all()
-    return list(activities)
+    return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
 
 async def update_offline_activity(
     activity_id: int, activity_update_data: OfflineActivityUpdate, db: Session
-) -> OfflineActivity | None:
+) -> Dict[str, Any] | None:
     try:
         statement = select(OfflineActivity).where(OfflineActivity.id == activity_id)
         activity = db.exec(statement).first()
@@ -80,7 +113,7 @@ async def update_offline_activity(
         db.add(activity)
         db.commit()
         db.refresh(activity)
-        return activity
+        return _serialize_geometry_to_lat_lng(activity)
     except Exception as e:
         db.rollback()
         raise e

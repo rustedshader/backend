@@ -103,8 +103,6 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "is_kyc_verified": current_user.is_kyc_verified,
         "is_email_verified": current_user.is_email_verified,
         "blockchain_address": current_user.blockchain_address,
-        "tourist_id_token": current_user.tourist_id_token,
-        "tourist_id_transaction_hash": current_user.tourist_id_transaction_hash,
     }
 
 

@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import get_current_admin_user, get_current_user
 from app.models.database.base import get_db
 from app.models.database.user import User
-from app.models.database.offline_activity import OfflineActivity
 from sqlmodel import Session
 from app.services.offline_activities import (
     create_offline_activity,
@@ -14,6 +13,7 @@ from app.services.offline_activities import (
     delete_offline_activity,
     update_offline_activity,
     update_offline_activity_route_data,
+    _get_offline_activity_raw_by_id,
 )
 from app.models.schemas.offline_activity import (
     OfflineActivityCreate,
@@ -21,12 +21,11 @@ from app.models.schemas.offline_activity import (
     OfflineActivityDataResponse,
     OfflineActivityDataUpdate,
 )
-from typing import List
 
 router = APIRouter(prefix="/offline_activities", tags=["offline_activities"])
 
 
-@router.get("/list", response_model=List[OfflineActivity])
+@router.get("/list")
 async def list_all_offline_activities(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -43,7 +42,7 @@ async def list_all_offline_activities(
         ) from e
 
 
-@router.get("/difficulty/{difficulty}", response_model=List[OfflineActivity])
+@router.get("/difficulty/{difficulty}")
 async def get_offline_activity_by_endpoint(
     difficulty: str,
     current_user: User = Depends(get_current_user),
@@ -61,7 +60,7 @@ async def get_offline_activity_by_endpoint(
         ) from e
 
 
-@router.get("/state/{state}", response_model=List[OfflineActivity])
+@router.get("/state/{state}")
 async def get_offline_activity_by_state(
     state: str,
     current_user: User = Depends(get_current_user),
@@ -79,7 +78,7 @@ async def get_offline_activity_by_state(
         ) from e
 
 
-@router.post("/", response_model=OfflineActivity, status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_offline_activity_endpoint(
     offline_activity_create: OfflineActivityCreate,
     admin_user: User = Depends(get_current_admin_user),
@@ -92,7 +91,6 @@ async def create_offline_activity_endpoint(
             offline_activity_create_data=offline_activity_create,
             db=db,
         )
-
         return offline_activity
     except Exception as e:
         print(e)
@@ -102,7 +100,7 @@ async def create_offline_activity_endpoint(
         ) from e
 
 
-@router.put("/{offline_activity_id}", response_model=OfflineActivity)
+@router.put("/{offline_activity_id}")
 async def update_offline_activity_endpoint(
     offline_activity_id: int,
     offline_activity_update: OfflineActivityUpdate,
@@ -112,7 +110,9 @@ async def update_offline_activity_endpoint(
     """Update an existing offline activity (admin only)."""
     try:
         # Check if activity exists
-        existing_activity = await get_offline_activity_by_id(offline_activity_id, db)
+        existing_activity = await _get_offline_activity_raw_by_id(
+            offline_activity_id, db
+        )
         if not existing_activity:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -181,7 +181,7 @@ async def add_offline_activity_route_data(
     """Add or update route data for an offline activity (admin only)."""
     try:
         # Check if activity exists
-        activity = await get_offline_activity_by_id(
+        activity = await _get_offline_activity_raw_by_id(
             offline_activity_route_data.offline_activity_id, db
         )
         if not activity:
@@ -263,7 +263,9 @@ async def delete_offline_activity_endpoint(
 ):
     """Delete an offline activity (admin only)."""
     try:
-        existing_activity = await get_offline_activity_by_id(offline_activity_id, db)
+        existing_activity = await _get_offline_activity_raw_by_id(
+            offline_activity_id, db
+        )
         if not existing_activity:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

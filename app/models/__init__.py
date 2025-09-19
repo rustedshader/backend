@@ -12,11 +12,8 @@ from app.models.database.trips import (
 from app.models.database.location_history import LocationHistory
 from app.models.database.guides import (
     Guides,
-    GuideCertificationLevelEnum,
-    GuideSpecialtyEnum,
-    GuideTrek,
 )
-from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
+from app.models.database.tracking_device import TrackingDevice
 
 
 __all__ = [
@@ -30,9 +27,5 @@ __all__ = [
     "TripStatusEnum",
     "LocationHistory",
     "Guides",
-    "GuideCertificationLevelEnum",
-    "GuideSpecialtyEnum",
-    "GuideTrek",
     "TrackingDevice",
-    "TrackingDeviceStatusEnum",
 ]

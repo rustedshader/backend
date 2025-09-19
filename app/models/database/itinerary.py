@@ -33,8 +33,8 @@ class ItineraryDay(SQLModel, table=True):
     )
     day_number: int = Field(index=True)
     offline_activity_id: Optional[int] = Field(
-        default=None, foreign_key="treks.id", index=True
+        default=None, foreign_key="offline_activities.id", index=True
     )
     online_activity_id: Optional[int] = Field(
-        default=None, foreign_key="places.id", index=True
+        default=None, foreign_key="online_activities.id", index=True
     )

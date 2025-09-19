@@ -1,8 +1,9 @@
 from sqlmodel import Session, select
 from app.models.database.online_activity import OnlineActivity
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 import datetime
 import math
+from geoalchemy2.shape import from_shape, to_shape
 from app.models.schemas.online_activity import (
     OnlineActivityCreate,
     OnlineActivityUpdate,
@@ -10,13 +11,37 @@ from app.models.schemas.online_activity import (
 )
 
 
+def _serialize_geometry_to_lat_lng(activity: OnlineActivity) -> Dict[str, Any]:
+    """Convert OnlineActivity with geometry to dict with latitude/longitude."""
+    activity_data = activity.dict()
+    if hasattr(activity, "location") and activity.location:
+        try:
+            point = to_shape(activity.location)
+            activity_data["latitude"] = point.y
+            activity_data["longitude"] = point.x
+        except Exception:
+            activity_data["latitude"] = None
+            activity_data["longitude"] = None
+    else:
+        activity_data["latitude"] = None
+        activity_data["longitude"] = None
+    return activity_data
+
+
 async def create_online_activity(
     online_activity_data: OnlineActivityCreate, admin_id: int, db: Session
-) -> OnlineActivity:
+) -> Dict[str, Any]:
     """Create a new online Activity (admin only)."""
     try:
+        data = online_activity_data.model_dump()
+        latitude = data.pop("latitude")
+        longitude = data.pop("longitude")
+        # WKT format: POINT(longitude latitude)
+        wkt_point = f"POINT({longitude} {latitude})"
+        data["location"] = wkt_point
+
         place = OnlineActivity(
-            **online_activity_data.model_dump(),
+            **data,
             created_by=admin_id,
             is_active=True,
         )
@@ -25,7 +50,7 @@ async def create_online_activity(
         db.commit()
         db.refresh(place)
 
-        return place
+        return _serialize_geometry_to_lat_lng(place)
     except Exception as e:
         db.rollback()
         raise e
@@ -33,8 +58,21 @@ async def create_online_activity(
 
 async def get_online_activity_by_id(
     online_activity_id: int, db: Session
-) -> Optional[OnlineActivity]:
+) -> Optional[Dict[str, Any]]:
     """Get a online activity by ID."""
+    statement = select(OnlineActivity).where(
+        OnlineActivity.id == online_activity_id, OnlineActivity.is_active
+    )
+    activity = db.exec(statement).first()
+    if not activity:
+        return None
+    return _serialize_geometry_to_lat_lng(activity)
+
+
+async def _get_online_activity_raw_by_id(
+    online_activity_id: int, db: Session
+) -> Optional[OnlineActivity]:
+    """Get raw OnlineActivity object without serialization - for internal use only."""
     statement = select(OnlineActivity).where(
         OnlineActivity.id == online_activity_id, OnlineActivity.is_active
     )
@@ -43,14 +81,27 @@ async def get_online_activity_by_id(
 
 async def update_online_activity(
     online_activity_id: int, update_data: OnlineActivityUpdate, db: Session
-) -> Optional[OnlineActivity]:
+) -> Optional[Dict[str, Any]]:
     """Update a online activity (admin only)."""
     try:
-        online_activity = await get_online_activity_by_id(online_activity_id, db)
+        online_activity = await _get_online_activity_raw_by_id(online_activity_id, db)
         if not online_activity:
             return None
 
         update_dict = update_data.model_dump(exclude_unset=True)
+
+        # Handle latitude/longitude conversion to geometry if present
+        if "latitude" in update_dict and "longitude" in update_dict:
+            latitude = update_dict.pop("latitude")
+            longitude = update_dict.pop("longitude")
+            if latitude is not None and longitude is not None:
+                wkt_point = f"POINT({longitude} {latitude})"
+                update_dict["location"] = wkt_point
+        elif "latitude" in update_dict or "longitude" in update_dict:
+            # Remove individual lat/lng fields if only one is provided
+            update_dict.pop("latitude", None)
+            update_dict.pop("longitude", None)
+
         for field, value in update_dict.items():
             setattr(online_activity, field, value)
 
@@ -60,7 +111,7 @@ async def update_online_activity(
         db.commit()
         db.refresh(online_activity)
 
-        return online_activity
+        return _serialize_geometry_to_lat_lng(online_activity)
     except Exception as e:
         db.rollback()
         raise e
@@ -113,7 +164,7 @@ async def search_online_activities(
     page: int = 1,
     page_size: int = 20,
     db: Session = None,
-) -> Tuple[List[OnlineActivity], int]:
+) -> Tuple[List[Dict[str, Any]], int]:
     """Search online activities with filtering and pagination."""
     try:
         statement = select(OnlineActivity).where(OnlineActivity.is_active)
@@ -148,7 +199,10 @@ async def search_online_activities(
         statement = statement.offset(offset).limit(page_size)
 
         activities = db.exec(statement).all()
-        return list(activities), total_count
+        serialized_activities = [
+            _serialize_geometry_to_lat_lng(activity) for activity in activities
+        ]
+        return serialized_activities, total_count
 
     except Exception as e:
         raise e
@@ -156,7 +210,7 @@ async def search_online_activities(
 
 async def get_featured_online_activities(
     db: Session, limit: int = 10
-) -> List[OnlineActivity]:
+) -> List[Dict[str, Any]]:
     """Get featured online activities."""
     try:
         statement = (
@@ -166,7 +220,7 @@ async def get_featured_online_activities(
         )
 
         activities = db.exec(statement).all()
-        return list(activities)
+        return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
     except Exception as e:
         raise e
@@ -174,7 +228,7 @@ async def get_featured_online_activities(
 
 async def get_nearby_online_activities(
     latitude: float, longitude: float, radius_km: float, db: Session, limit: int = 20
-) -> List[OnlineActivity]:
+) -> List[Dict[str, Any]]:
     """Get online activities within a radius of given coordinates."""
     try:
         # Get all active activities
@@ -184,24 +238,31 @@ async def get_nearby_online_activities(
         # Filter by distance
         nearby_activities = []
         for activity in all_activities:
-            if activity.latitude is not None and activity.longitude is not None:
-                distance = calculate_distance(
-                    latitude,
-                    longitude,
-                    float(activity.latitude),
-                    float(activity.longitude),
-                )
-                if distance <= radius_km:
-                    nearby_activities.append(activity)
+            if hasattr(activity, "location") and activity.location:
+                try:
+                    point = to_shape(activity.location)
+                    activity_lat = point.y
+                    activity_lng = point.x
+                    distance = calculate_distance(
+                        latitude,
+                        longitude,
+                        float(activity_lat),
+                        float(activity_lng),
+                    )
+                    if distance <= radius_km:
+                        nearby_activities.append((activity, distance))
+                except Exception:
+                    continue
 
         # Sort by distance and limit
-        nearby_activities.sort(
-            key=lambda a: calculate_distance(
-                latitude, longitude, float(a.latitude), float(a.longitude)
-            )
-        )
+        nearby_activities.sort(key=lambda a: a[1])
 
-        return nearby_activities[:limit]
+        # Return serialized activities without distance
+        result = []
+        for activity, _ in nearby_activities[:limit]:
+            result.append(_serialize_geometry_to_lat_lng(activity))
+
+        return result
 
     except Exception as e:
         raise e
@@ -209,20 +270,20 @@ async def get_nearby_online_activities(
 
 async def get_online_activities_by_type(
     activity_type: str, db: Session, limit: int = 20
-) -> List[OnlineActivity]:
+) -> List[Dict[str, Any]]:
     """Get online activities by type."""
     try:
         statement = (
             select(OnlineActivity)
             .where(
                 OnlineActivity.is_active,
-                OnlineActivity.activity_type.ilike(f"%{activity_type}%"),
+                OnlineActivity.place_type.ilike(f"%{activity_type}%"),
             )
             .limit(limit)
         )
 
         activities = db.exec(statement).all()
-        return list(activities)
+        return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
     except Exception as e:
         raise e
@@ -230,7 +291,7 @@ async def get_online_activities_by_type(
 
 async def get_online_activities_by_city(
     city: str, db: Session, limit: int = 20
-) -> List[OnlineActivity]:
+) -> List[Dict[str, Any]]:
     """Get online activities by city."""
     try:
         statement = (
@@ -240,7 +301,7 @@ async def get_online_activities_by_city(
         )
 
         activities = db.exec(statement).all()
-        return list(activities)
+        return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
     except Exception as e:
         raise e
