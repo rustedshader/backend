@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from typing import Optional, List
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from app.api.deps import get_current_admin_user, get_current_user
 from app.models.database.base import get_db
 from app.models.database.user import User
@@ -6,9 +7,7 @@ from sqlmodel import Session
 from app.services.offline_activities import (
     create_offline_activity,
     get_offline_activity_by_id,
-    get_all_offline_activities,
-    get_offline_activities_by_difficulty,
-    get_offline_activities_by_state,
+    get_offline_activities_with_filters,
     get_geojson_route_data,
     delete_offline_activity,
     update_offline_activity,
@@ -18,6 +17,7 @@ from app.services.offline_activities import (
 from app.models.schemas.offline_activity import (
     OfflineActivityCreate,
     OfflineActivityUpdate,
+    OfflineActivityResponse,
     OfflineActivityDataResponse,
     OfflineActivityDataUpdate,
 )
@@ -25,56 +25,34 @@ from app.models.schemas.offline_activity import (
 router = APIRouter(prefix="/offline_activities", tags=["offline_activities"])
 
 
-@router.get("/list")
-async def list_all_offline_activities(
+@router.get("/", response_model=List[OfflineActivityResponse])
+async def get_offline_activities_endpoint(
+    state: Optional[str] = Query(None, description="Filter by state"),
+    difficulty: Optional[str] = Query(
+        None, description="Filter by difficulty level (easy, medium, hard)"
+    ),
+    city: Optional[str] = Query(None, description="Filter by city"),
+    district: Optional[str] = Query(None, description="Filter by district"),
+    limit: int = Query(default=100, le=1000, description="Maximum number of results"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all available offline activities."""
+    """Get offline activities with optional filters."""
     try:
-        offline_activities = await get_all_offline_activities(db)
+        offline_activities = await get_offline_activities_with_filters(
+            db,
+            state=state,
+            difficulty=difficulty,
+            city=city,
+            district=district,
+            limit=limit,
+        )
         return offline_activities
     except Exception as e:
         print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch offline activities",
-        ) from e
-
-
-@router.get("/difficulty/{difficulty}")
-async def get_offline_activity_by_endpoint(
-    difficulty: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get offline activities filtered by difficulty level (easy, medium, hard)."""
-    try:
-        offline_activities = await get_offline_activities_by_difficulty(difficulty, db)
-        return offline_activities
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch offline activities by difficulty",
-        ) from e
-
-
-@router.get("/state/{state}")
-async def get_offline_activity_by_state(
-    state: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get offline activities filtered by state."""
-    try:
-        offline_activities = await get_offline_activities_by_state(state, db)
-        return offline_activities
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch offline activities by state",
         ) from e
 
 

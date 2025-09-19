@@ -3,7 +3,7 @@ from app.models.database.online_activity import OnlineActivity
 from typing import Optional, List, Tuple, Dict, Any
 import datetime
 import math
-from geoalchemy2.shape import from_shape, to_shape
+from geoalchemy2.shape import to_shape
 from app.models.schemas.online_activity import (
     OnlineActivityCreate,
     OnlineActivityUpdate,
@@ -14,6 +14,7 @@ from app.models.schemas.online_activity import (
 def _serialize_geometry_to_lat_lng(activity: OnlineActivity) -> Dict[str, Any]:
     """Convert OnlineActivity with geometry to dict with latitude/longitude."""
     activity_data = activity.dict()
+
     if hasattr(activity, "location") and activity.location:
         try:
             point = to_shape(activity.location)
@@ -120,7 +121,7 @@ async def update_online_activity(
 async def delete_online_activity(online_activity_id: int, db: Session) -> bool:
     """Soft delete a Online Activity (admin only)."""
     try:
-        online_activity = await get_online_activity_by_id(online_activity_id, db)
+        online_activity = await _get_online_activity_raw_by_id(online_activity_id, db)
         if not online_activity:
             return False
 
@@ -180,14 +181,9 @@ async def search_online_activities(
                 OnlineActivity.state.ilike(f"%{search_query.state}%")
             )
 
-        if search_query.activity_type:
+        if search_query.place_type:
             statement = statement.where(
-                OnlineActivity.activity_type.ilike(f"%{search_query.activity_type}%")
-            )
-
-        if search_query.is_featured is not None:
-            statement = statement.where(
-                OnlineActivity.is_featured == search_query.is_featured
+                OnlineActivity.place_type.ilike(f"%{search_query.place_type}%")
             )
 
         # Get total count
@@ -203,24 +199,6 @@ async def search_online_activities(
             _serialize_geometry_to_lat_lng(activity) for activity in activities
         ]
         return serialized_activities, total_count
-
-    except Exception as e:
-        raise e
-
-
-async def get_featured_online_activities(
-    db: Session, limit: int = 10
-) -> List[Dict[str, Any]]:
-    """Get featured online activities."""
-    try:
-        statement = (
-            select(OnlineActivity)
-            .where(OnlineActivity.is_active, OnlineActivity.is_featured)
-            .limit(limit)
-        )
-
-        activities = db.exec(statement).all()
-        return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
     except Exception as e:
         raise e

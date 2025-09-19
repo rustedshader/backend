@@ -23,18 +23,24 @@ async def get_online_activities(
     page_size: int = Query(20, ge=1, le=100),
     city: str = Query(None),
     state: str = Query(None),
-    activity_type: str = Query(None),
-    is_featured: bool = Query(None),
+    place_type: str = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get online activities with filtering and pagination."""
+    """Get online activities with optional filters and pagination.
+
+    Available filters:
+    - city: Filter by city name (partial match)
+    - state: Filter by state name (partial match)
+    - place_type: Filter by place type
+    - page: Page number for pagination (default: 1)
+    - page_size: Number of results per page (default: 20, max: 100)
+    """
     try:
         search_query = OnlineActivitySearchQuery(
             city=city,
             state=state,
-            activity_type=activity_type,
-            is_featured=is_featured,
+            place_type=place_type,
         )
 
         (
@@ -59,27 +65,6 @@ async def get_online_activities(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch online activities: {str(e)}",
-        )
-
-
-@router.get("/featured", response_model=List[OnlineActivityResponse])
-async def get_featured_online_activities(
-    limit: int = Query(10, ge=1, le=50),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get featured online activities."""
-    try:
-        activities = await online_activity_service.get_featured_online_activities(
-            db=db, limit=limit
-        )
-        return [
-            OnlineActivityResponse.model_validate(activity) for activity in activities
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch featured online activities: {str(e)}",
         )
 
 
@@ -108,50 +93,6 @@ async def search_online_activities_nearby(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search nearby online activities: {str(e)}",
-        )
-
-
-@router.get("/type/{activity_type}", response_model=List[OnlineActivityResponse])
-async def get_online_activities_by_type(
-    activity_type: str,
-    limit: int = Query(20, ge=1, le=50),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get online activities by type."""
-    try:
-        activities = await online_activity_service.get_online_activities_by_type(
-            activity_type=activity_type, db=db, limit=limit
-        )
-        return [
-            OnlineActivityResponse.model_validate(activity) for activity in activities
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch online activities by type: {str(e)}",
-        )
-
-
-@router.get("/city/{city}", response_model=List[OnlineActivityResponse])
-async def get_online_activities_by_city(
-    city: str,
-    limit: int = Query(20, ge=1, le=50),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get online activities in a specific city."""
-    try:
-        activities = await online_activity_service.get_online_activities_by_city(
-            city=city, db=db, limit=limit
-        )
-        return [
-            OnlineActivityResponse.model_validate(activity) for activity in activities
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch online activities by city: {str(e)}",
         )
 
 
@@ -186,7 +127,7 @@ async def get_online_activity(
 
 # Admin endpoints for managing online activities
 @router.post(
-    "/admin/",
+    "/",
     response_model=OnlineActivityResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -210,7 +151,7 @@ async def create_online_activity(
         )
 
 
-@router.patch("/admin/{activity_id}", response_model=OnlineActivityResponse)
+@router.put("/{activity_id}", response_model=OnlineActivityResponse)
 async def update_online_activity(
     activity_id: int,
     update_data: OnlineActivityUpdate,
@@ -240,7 +181,7 @@ async def update_online_activity(
         )
 
 
-@router.delete("/admin/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_online_activity(
     activity_id: int,
     current_admin: User = Depends(get_current_admin_user),

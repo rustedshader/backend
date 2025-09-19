@@ -13,7 +13,7 @@ from app.models.database.offline_activity import (
     OfflineActivity,
     OfflineActivityRouteData,
 )
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 def _serialize_geometry_to_lat_lng(activity: OfflineActivity) -> Dict[str, Any]:
@@ -95,6 +95,38 @@ async def get_offline_activities_by_state(
 ) -> List[Dict[str, Any]]:
     """Get offline activities filtered by state."""
     statement = select(OfflineActivity).where(OfflineActivity.state.ilike(f"%{state}%"))
+    activities = db.exec(statement).all()
+    return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
+
+
+async def get_offline_activities_with_filters(
+    db: Session,
+    state: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    city: Optional[str] = None,
+    district: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Get offline activities with optional filters."""
+    statement = select(OfflineActivity)
+
+    # Apply filters if provided
+    if state:
+        statement = statement.where(OfflineActivity.state.ilike(f"%{state}%"))
+
+    if difficulty:
+        statement = statement.where(OfflineActivity.difficulty_level == difficulty)
+
+    if city:
+        statement = statement.where(OfflineActivity.city.ilike(f"%{city}%"))
+
+    if district:
+        statement = statement.where(OfflineActivity.district.ilike(f"%{district}%"))
+
+    # Apply limit if provided
+    if limit:
+        statement = statement.limit(limit)
+
     activities = db.exec(statement).all()
     return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
