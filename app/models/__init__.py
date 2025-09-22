@@ -1,42 +1,31 @@
 # Import all SQLModel models to ensure they are registered with SQLModel.metadata
 from app.models.database.user import User, RefreshToken, UserRoleEnum
-from app.models.database.treks import Trek, DifficultyLevelEnum, TrekRouteData
+from app.models.database.offline_activity import (
+    OfflineActivity,
+    DifficultyLevelEnum,
+    OfflineActivityRouteData,
+)
 from app.models.database.trips import (
     Trips,
     TripStatusEnum,
-    AlertTypeEnum,
-    AlertStatusEnum,
-    Alerts,
-    LocationHistory,
 )
+from app.models.database.location_history import LocationHistory
 from app.models.database.guides import (
     Guides,
-    GuideCertificationLevelEnum,
-    GuideSpecialtyEnum,
-    GuideTrek,
 )
-from app.models.database.tracking_device import TrackingDevice, TrackingDeviceStatusEnum
-from app.models.database.location_sharing import LocationShareHistory
+from app.models.database.tracking_device import TrackingDevice
 
 
 __all__ = [
     "User",
     "RefreshToken",
     "UserRoleEnum",
-    "Trek",
+    "OfflineActivity",
     "DifficultyLevelEnum",
-    "TrekRouteData",
+    "OfflineActivityRouteData",
     "Trips",
     "TripStatusEnum",
-    "AlertTypeEnum",
-    "AlertStatusEnum",
-    "Alerts",
     "LocationHistory",
     "Guides",
-    "GuideCertificationLevelEnum",
-    "GuideSpecialtyEnum",
-    "GuideTrek",
     "TrackingDevice",
-    "TrackingDeviceStatusEnum",
-    "LocationShareHistory",
 ]

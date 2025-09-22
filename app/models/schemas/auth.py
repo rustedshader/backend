@@ -11,7 +11,6 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     phone_number: str
-    indian_citizenship: bool = False
     aadhar_number: str | None = None
     passport_number: str | None = None
 
@@ -24,14 +23,11 @@ class UserResponse(BaseModel):
     email: str
     country_code: str
     phone_number: str
-    indian_citizenship: bool
     is_kyc_verified: bool
     is_email_verified: bool
     is_active: bool
     role: UserRoleEnum
     blockchain_address: str | None = None
-    tourist_id_token: int | None = None
-    tourist_id_transaction_hash: str | None = None
 
     class Config:
         from_attributes = True
@@ -68,6 +64,8 @@ class BlockchainIDResponse(BaseModel):
     success: bool
     message: str
     tourist_id_token: int | None = None
+    trip_id: int | None = None
+    trip_status: str | None = None
     blockchain_address: str | None = None
     transaction_hash: str | None = None
     blockchain_private_key: str | None = None
@@ -82,7 +80,6 @@ class UserVerificationProfile(BaseModel):
     email: str
     country_code: str
     phone_number: str
-    indian_citizenship: bool
     is_kyc_verified: bool
     has_blockchain_id: bool
     blockchain_address: str | None = None

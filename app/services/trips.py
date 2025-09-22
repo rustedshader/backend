@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
-from app.models.database.trips import Trips, LocationHistory, TripStatusEnum
-from app.models.database.tracking_device import TrackingDevice
+from app.models.database.trips import Trips
+from app.models.database.location_history import LocationHistory
 from typing import Sequence
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
@@ -19,83 +19,31 @@ async def get_user_trips(user_id: int, db: Session) -> Sequence[Trips] | None:
     return trips
 
 
-async def link_tracking_device_to_trip(
-    trip_id: int, device_id: str, user_id: int, db: Session
-) -> Trips:
-    """Link a tracking device to a trip."""
-    try:
-        # Get the trip and verify it belongs to the user
-        trip_statement = select(Trips).where(
-            Trips.id == trip_id, Trips.user_id == user_id
-        )
-        trip = db.exec(trip_statement).first()
-
-        if not trip:
-            raise ValueError("Trip not found or doesn't belong to user")
-
-        # Get the tracking device by device_id
-        device_statement = select(TrackingDevice).where(
-            TrackingDevice.device_id == device_id
-        )
-        tracking_device = db.exec(device_statement).first()
-
-        if not tracking_device:
-            raise ValueError("Tracking device not found")
-
-        # Check if device is available (not linked to another active trip)
-        active_trip_statement = select(Trips).where(
-            Trips.tracking_deivce_id == tracking_device.id,
-            Trips.status.in_([TripStatusEnum.ASSIGNED, TripStatusEnum.IN_PROGRESS]),
-        )
-        active_trip = db.exec(active_trip_statement).first()
-
-        if active_trip and active_trip.id != trip_id:
-            raise ValueError("Tracking device is already linked to another active trip")
-
-        # Link the device to the trip
-        trip.tracking_deivce_id = tracking_device.id
-        db.add(trip)
-        db.commit()
-        db.refresh(trip)
-
-        return trip
-
-    except Exception as e:
-        db.rollback()
-        raise e
-
-
 async def save_location_data(
     trip_id: int,
     latitude: float,
     longitude: float,
-    tracking_device: TrackingDevice,
+    tracking_device,
     db: Session,
 ) -> LocationHistory:
-    """Save location data for a trip."""
+    """Save location data to location history."""
     try:
-        # Verify the tracking device is linked to this trip
-        trip_statement = select(Trips).where(
-            Trips.id == trip_id,
-            Trips.tracking_deivce_id == tracking_device.id,
-            Trips.status == TripStatusEnum.IN_PROGRESS,
-        )
-        trip = db.exec(trip_statement).first()
+        # Create a Point geometry from latitude and longitude
+        point = Point(
+            longitude, latitude
+        )  # Note: longitude first, then latitude for Point
 
+        # Get the trip to validate it exists and get user_id
+        trip = await get_trip_by_id(trip_id, db)
         if not trip:
-            raise ValueError(
-                "Trip not found, device not linked, or trip not in progress"
-            )
+            raise ValueError(f"Trip with id {trip_id} not found")
 
-        # Create Point geometry for the location
-        point = Point(longitude, latitude)
-        location_geom = from_shape(point, srid=4326)
-
-        # Save location data
+        # Create location history record
         location_history = LocationHistory(
+            user_id=trip.user_id,
             trip_id=trip_id,
-            location=location_geom,
-            timestamp=int(datetime.datetime.utcnow().timestamp()),
+            location=from_shape(point, srid=4326),
+            timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
 
         db.add(location_history)
@@ -106,32 +54,4 @@ async def save_location_data(
 
     except Exception as e:
         db.rollback()
-        raise e
-
-
-async def get_trip_locations(
-    trip_id: int, user_id: int, db: Session
-) -> Sequence[LocationHistory]:
-    """Get all location history for a trip."""
-    try:
-        # Verify trip belongs to user
-        trip_statement = select(Trips).where(
-            Trips.id == trip_id, Trips.user_id == user_id
-        )
-        trip = db.exec(trip_statement).first()
-
-        if not trip:
-            raise ValueError("Trip not found or doesn't belong to user")
-
-        # Get location history
-        location_statement = (
-            select(LocationHistory)
-            .where(LocationHistory.trip_id == trip_id)
-            .order_by(LocationHistory.timestamp)
-        )
-
-        locations = db.exec(location_statement).all()
-        return locations
-
-    except Exception as e:
         raise e
