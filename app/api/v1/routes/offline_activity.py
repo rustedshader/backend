@@ -13,7 +13,7 @@ from app.services.offline_activities import (
     update_offline_activity,
     update_offline_activity_route_data,
     _get_offline_activity_raw_by_id,
-    search_offline_activities_by_name,
+    search_offline_activities,
 )
 from app.models.schemas.offline_activity import (
     OfflineActivityCreate,
@@ -21,6 +21,8 @@ from app.models.schemas.offline_activity import (
     OfflineActivityResponse,
     OfflineActivityDataResponse,
     OfflineActivityDataUpdate,
+    OfflineActivitySearchQuery,
+    OfflineActivityListResponse,
 )
 
 router = APIRouter(prefix="/offline_activities", tags=["offline_activities"])
@@ -57,21 +59,28 @@ async def get_offline_activities_endpoint(
         ) from e
 
 
-@router.get("/search", response_model=List[OfflineActivityResponse])
+@router.post("/search", response_model=OfflineActivityListResponse)
 async def search_offline_activities_endpoint(
-    name: str = Query(..., description="Search term for activity name"),
-    limit: int = Query(default=100, le=1000, description="Maximum number of results"),
+    search_query: OfflineActivitySearchQuery,
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Page size"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Search offline activities by name."""
+    """Search offline activities with comprehensive filtering options including city and state."""
     try:
-        offline_activities = await search_offline_activities_by_name(
+        offline_activities, total_count = await search_offline_activities(
+            search_query=search_query,
+            page=page,
+            page_size=page_size,
             db=db,
-            name=name,
-            limit=limit,
         )
-        return offline_activities
+        return OfflineActivityListResponse(
+            activities=offline_activities,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+        )
     except Exception as e:
         print(e)
         raise HTTPException(

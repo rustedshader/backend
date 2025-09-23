@@ -74,6 +74,17 @@ class OfflineActivityResponse(OfflineActivityBase):
         from_attributes = True
 
 
+class OfflineActivitySearchQuery(BaseModel):
+    name: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    district: Optional[str] = None
+    difficulty_level: Optional[DifficultyLevelEnum] = None
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    radius_km: Optional[float] = Field(None, ge=0, le=1000)  # Search within radius
+
+
 class OfflineActivityListResponse(BaseModel):
     activities: List[OfflineActivityResponse]
     total_count: int

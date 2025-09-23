@@ -8,12 +8,13 @@ from app.models.schemas.offline_activity import (
     OfflineActivityCreate,
     OfflineActivityUpdate,
     OfflineActivityDataUpdate,
+    OfflineActivitySearchQuery,
 )
 from app.models.database.offline_activity import (
     OfflineActivity,
     OfflineActivityRouteData,
 )
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 
 def _serialize_geometry_to_lat_lng(activity: OfflineActivity) -> Dict[str, Any]:
@@ -246,4 +247,108 @@ async def delete_offline_activity(activity_id: int, db: Session) -> bool:
         return True
     except Exception as e:
         db.rollback()
+        raise e
+
+
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the distance between two points in kilometers using Haversine formula."""
+    import math
+
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    )
+    c = 2 * math.asin(math.sqrt(a))
+
+    # Radius of Earth in kilometers
+    r = 6371
+    return c * r
+
+
+async def search_offline_activities(
+    search_query: OfflineActivitySearchQuery,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = None,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Search offline activities with filtering and pagination."""
+    try:
+        statement = select(OfflineActivity)
+
+        # Apply filters
+        if search_query.name:
+            statement = statement.where(
+                OfflineActivity.name.ilike(f"%{search_query.name}%")
+            )
+
+        if search_query.city:
+            statement = statement.where(
+                OfflineActivity.city.ilike(f"%{search_query.city}%")
+            )
+
+        if search_query.state:
+            statement = statement.where(
+                OfflineActivity.state.ilike(f"%{search_query.state}%")
+            )
+
+        if search_query.district:
+            statement = statement.where(
+                OfflineActivity.district.ilike(f"%{search_query.district}%")
+            )
+
+        if search_query.difficulty_level:
+            statement = statement.where(
+                OfflineActivity.difficulty_level == search_query.difficulty_level
+            )
+
+        # Execute query to get filtered results
+        activities = db.exec(statement).all()
+
+        # Apply location-based filtering if coordinates provided
+        filtered_activities = []
+        if (
+            search_query.latitude is not None
+            and search_query.longitude is not None
+            and search_query.radius_km is not None
+        ):
+            for activity in activities:
+                try:
+                    if activity.location:
+                        point = to_shape(activity.location)
+                        distance = calculate_distance(
+                            search_query.latitude,
+                            search_query.longitude,
+                            point.y,
+                            point.x,
+                        )
+                        if distance <= search_query.radius_km:
+                            filtered_activities.append(activity)
+                except Exception:
+                    continue
+        else:
+            filtered_activities = activities
+
+        # Get total count
+        total_count = len(filtered_activities)
+
+        # Apply pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        paginated_activities = filtered_activities[start_index:end_index]
+
+        # Serialize activities
+        serialized_activities = [
+            _serialize_geometry_to_lat_lng(activity)
+            for activity in paginated_activities
+        ]
+
+        return serialized_activities, total_count
+
+    except Exception as e:
         raise e
