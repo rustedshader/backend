@@ -48,6 +48,24 @@ async def get_all_trips(
         ) from e
 
 
+@router.get("/location-shares", response_model=list[LocationSharingResponse])
+async def get_user_trip_location_shares(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all location sharing entries for the current user."""
+    try:
+        location_shares = await get_user_location_shares(current_user.id, db)
+        return location_shares
+
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch location shares",
+        ) from e
+
+
 @router.get("/{trip_id}", response_model=Trips)
 async def get_trip_from_id(trip_id: int, db: Session = Depends(get_db)):
     try:
@@ -189,22 +207,4 @@ async def toggle_trip_location_sharing(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update location sharing",
-        ) from e
-
-
-@router.get("/location-shares", response_model=list[LocationSharingResponse])
-async def get_user_trip_location_shares(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get all location sharing entries for the current user."""
-    try:
-        location_shares = await get_user_location_shares(current_user.id, db)
-        return location_shares
-
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch location shares",
         ) from e
