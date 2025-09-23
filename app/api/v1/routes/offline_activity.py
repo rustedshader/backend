@@ -25,7 +25,7 @@ from app.models.schemas.offline_activity import (
     OfflineActivityListResponse,
 )
 
-router = APIRouter(prefix="/offline_activities", tags=["offline_activities"])
+router = APIRouter(prefix="/offline-activities", tags=["offline-activities"])
 
 
 @router.get("/", response_model=List[OfflineActivityResponse])
