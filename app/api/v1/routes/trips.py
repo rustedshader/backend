@@ -8,6 +8,9 @@ from app.models.database.base import get_db
 from app.models.database.tracking_device import TrackingDevice
 from app.models.schemas.trips import (
     LocationUpdate,
+    TripCreate,
+    TripCreateResponse,
+    TripWithShareCodeResponse,
 )
 from app.models.schemas.location_sharing import (
     LocationSharingCreate,
@@ -21,6 +24,8 @@ from app.services.trips import (
     get_user_trips,
     get_trip_by_id,
     save_location_data,
+    create_trip_with_location_sharing,
+    get_user_trips_with_share_codes,
 )
 from app.services.location_sharing import (
     create_location_sharing,
@@ -34,13 +39,15 @@ from app.models.database.trips import Trips
 router = APIRouter(prefix="/trips", tags=["trips"])
 
 
-@router.get("/all-trips", response_model=Sequence[Trips])
+@router.get("/all-trips", response_model=list[TripWithShareCodeResponse])
 async def get_all_trips(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     try:
-        trips = await get_user_trips(current_user.id, db)
-        return trips
+        trips_with_share_codes = await get_user_trips_with_share_codes(
+            current_user.id, db
+        )
+        return trips_with_share_codes
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -48,7 +55,9 @@ async def get_all_trips(
         ) from e
 
 
-@router.get("/location-shares", response_model=list[LocationSharingResponse])
+@router.get(
+    "/location-shares", response_model=list[LocationSharingResponse], deprecated=True
+)
 async def get_user_trip_location_shares(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -127,7 +136,9 @@ async def receive_live_location(
 # Location Sharing Endpoints
 
 
-@router.post("/{trip_id}/share-location", response_model=LocationSharingResponse)
+@router.post(
+    "/{trip_id}/share-location", response_model=LocationSharingResponse, deprecated=True
+)
 async def create_trip_location_sharing(
     trip_id: int,
     location_sharing_data: LocationSharingCreate,
@@ -175,7 +186,7 @@ async def get_trip_shared_location(
         ) from e
 
 
-@router.patch("/{trip_id}/share-location/toggle")
+@router.patch("/{trip_id}/share-location/toggle", deprecated=True)
 async def toggle_trip_location_sharing(
     trip_id: int,
     is_active: bool,

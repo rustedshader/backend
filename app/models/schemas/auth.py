@@ -132,7 +132,6 @@ class UserStatsResponse(BaseModel):
     by_role: dict
     by_verification: dict
     by_status: dict
-    blockchain_ids_issued: int
 
 
 class UserStatusUpdateRequest(BaseModel):

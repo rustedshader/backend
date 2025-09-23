@@ -43,3 +43,41 @@ class LocationHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TripCreate(BaseModel):
+    itinerary_id: int
+    expires_in_days: Optional[int] = 7  # Default 7 days for location sharing
+
+
+class TripCreateResponse(BaseModel):
+    trip_id: int
+    user_id: int
+    itinerary_id: int
+    status: str
+    tourist_id: Optional[str]
+    blockchain_transaction_hash: Optional[str]
+    share_code: str
+    share_expires_at: datetime.datetime
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TripWithShareCodeResponse(BaseModel):
+    id: int
+    user_id: int
+    itinerary_id: int
+    status: str
+    tourist_id: Optional[str]
+    blockchain_transaction_hash: Optional[str]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    # Location sharing info
+    share_code: Optional[str] = None
+    share_expires_at: Optional[datetime.datetime] = None
+    share_is_active: Optional[bool] = None
+
+    class Config:
+        from_attributes = True

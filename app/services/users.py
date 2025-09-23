@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select, desc
 
 from app.models.database.user import User, UserRoleEnum
 from app.models.schemas.auth import UserResponse
@@ -32,8 +32,7 @@ class UserService:
             if is_verified_filter is not None:
                 statement = statement.where(User.is_kyc_verified == is_verified_filter)
 
-            # Apply pagination
-            statement = statement.offset(offset).limit(limit).order_by(User.id.desc())
+            statement = statement.offset(offset).limit(limit).order_by(desc(User.id))
 
             users = db.exec(statement).all()
 
@@ -103,35 +102,6 @@ class UserService:
             )
 
     @staticmethod
-    async def get_user_blockchain_info(db: Session, user_id: int) -> dict:
-        """Get blockchain information for a user"""
-        try:
-            statement = select(User).where(User.id == user_id)
-            user = db.exec(statement).first()
-
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-                )
-
-            return {
-                "user_id": user.id,
-                "blockchain_address": user.blockchain_address,
-                "tourist_id_token": user.tourist_id_token,
-                "tourist_id_transaction_hash": user.tourist_id_transaction_hash,
-                "has_blockchain_id": bool(user.tourist_id_token),
-                "is_kyc_verified": user.is_kyc_verified,
-            }
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve blockchain info: {str(e)}",
-            )
-
-    @staticmethod
     async def get_user_stats(db: Session) -> dict:
         """Get user statistics for admin dashboard"""
         try:
@@ -156,9 +126,6 @@ class UserService:
             active_count = len([u for u in total_users if u.is_active])
             inactive_count = len([u for u in total_users if not u.is_active])
 
-            # Count blockchain IDs
-            blockchain_id_count = len([u for u in total_users if u.tourist_id_token])
-
             return {
                 "total_users": len(total_users),
                 "by_role": {
@@ -175,7 +142,6 @@ class UserService:
                     "active": active_count,
                     "inactive": inactive_count,
                 },
-                "blockchain_ids_issued": blockchain_id_count,
             }
 
         except Exception as e:

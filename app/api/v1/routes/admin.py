@@ -1,150 +1,34 @@
 from fastapi import APIRouter, Depends, status, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session
 from app.api.deps import get_current_admin_user
 from app.models.database.base import get_db
 from app.models.database.user import User
-from app.models.database.trips import Trips, TripStatusEnum
+
 from app.models.schemas.auth import (
     BlockchainIDRequest,
     BlockchainIDResponse,
 )
-from app.utils.blockchain import TouristIDClient
-from web3 import Web3
-import json
+
+from app.services.admin import (
+    get_active_trips,
+    get_latest_location_all_trips,
+    issue_blockchain_id_at_entry_point,
+)
+
+from fastapi import Query
+from typing import Optional
+
+from app.models.database.user import UserRoleEnum
+from app.models.schemas.auth import (
+    UserResponse,
+    UserListResponse,
+    UserStatsResponse,
+    UserStatusUpdateRequest,
+)
+from app.services.users import UserService
+
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-async def issue_blockchain_id_at_entry_point(
-    user_id: int, itinerary_id: int, validity_days: int, official_id: int, db: Session
-) -> dict:
-    """
-    Issue blockchain ID to a tourist at an entry point by an authorized official.
-    This should only be called after physical verification of documents.
-    Automatically sets KYC verified to true when blockchain ID is issued.
-    """
-    try:
-        from app.services import itinerary as itinerary_service
-
-        # Get the user
-        user = db.exec(select(User).where(User.id == user_id)).first()
-        if not user:
-            raise ValueError("User not found")
-
-        # KYC verification will be automatically set when blockchain ID is issued
-
-        # Get itinerary data for blockchain
-        itinerary_data = await itinerary_service.get_itinerary_for_blockchain(
-            itinerary_id=itinerary_id, db=db
-        )
-
-        if not itinerary_data or itinerary_data.strip() == "":
-            raise ValueError(f"Invalid itinerary data for itinerary_id {itinerary_id}")
-
-        # Create blockchain account for the user
-        web3 = Web3()
-        userblockchain_account = web3.eth.account.create()
-        userblockchain_account_address = userblockchain_account.address
-        userblockchain_account_private_key = userblockchain_account.key.hex()
-
-        # Validate blockchain address
-        if not userblockchain_account_address or not web3.is_address(
-            userblockchain_account_address
-        ):
-            raise ValueError("Failed to generate valid blockchain address")
-
-        # Initialize blockchain client and issue tourist ID
-        # Validate blockchain configuration first
-        from app.core.config import settings
-
-        if (
-            not settings.owner_address
-            or not settings.private_key
-            or not settings.contract_address
-        ):
-            raise ValueError(
-                "Blockchain configuration missing. Please set OWNER_ADDRESS, PRIVATE_KEY, and CONTRACT_ADDRESS environment variables."
-            )
-
-        blockchain_client = TouristIDClient()
-
-        # Create KYC hash from user data - handle None values
-        kyc_data = {
-            "first_name": user.first_name or "",
-            "last_name": user.last_name or "",
-            "email": user.email or "",
-            "country_code": user.country_code or "",
-            "aadhar_hash": user.aadhar_number_hash or "",
-            "passport_hash": user.passport_number_hash or "",
-            "verified_by_official": official_id,
-        }
-        kyc_json = json.dumps(kyc_data, sort_keys=True)
-        if not kyc_json or kyc_json.strip() == "":
-            raise ValueError("Invalid KYC data - cannot generate hash")
-
-        kyc_hash = blockchain_client.bytes32_from_text(kyc_json)
-        if not kyc_hash:
-            raise ValueError("Failed to generate KYC hash")
-
-        # Create itinerary hash
-        if not itinerary_data or itinerary_data.strip() == "":
-            raise ValueError("Invalid itinerary data - cannot generate hash")
-
-        itinerary_hash = blockchain_client.bytes32_from_text(itinerary_data)
-        if not itinerary_hash:
-            raise ValueError("Failed to generate itinerary hash")
-
-        # Issue tourist ID with specified validity
-        validity_seconds = validity_days * 24 * 3600
-
-        token_id, receipt = blockchain_client.issue_id(
-            tourist=userblockchain_account_address,
-            kyc_hash_hex32=kyc_hash,
-            itinerary_hash_hex32=itinerary_hash,
-            validity_seconds=validity_seconds,
-        )
-
-        # Update user with blockchain information and automatically verify KYC
-        user.blockchain_address = userblockchain_account_address
-        user.is_kyc_verified = (
-            True  # Automatically verify KYC when blockchain ID is issued
-        )
-
-        # Create a new trip for this tourist ID
-        new_trip = Trips(
-            user_id=user_id,
-            itinerary_id=itinerary_id,
-            status=TripStatusEnum.ONGOING,  # Auto-start the trip when blockchain ID is issued
-            tourist_id=str(token_id) if token_id != -1 else None,
-            blockchain_transaction_hash=receipt.transactionHash.hex(),
-        )
-
-        db.add(user)
-        db.add(new_trip)
-        db.commit()
-        db.refresh(user)
-        db.refresh(new_trip)
-
-        return {
-            "success": True,
-            "message": "Blockchain ID issued successfully, KYC verified, and trip started",
-            "tourist_id_token": token_id,
-            "trip_id": new_trip.id,
-            "trip_status": new_trip.status.value,
-            "blockchain_address": userblockchain_account_address,
-            "transaction_hash": receipt.transactionHash.hex(),
-            "blockchain_private_key": userblockchain_account_private_key,  # Securely provide to user
-            "validity_days": validity_days,
-        }
-
-    except Exception as e:
-        db.rollback()
-        print(f"❌ Error in issue_blockchain_id_at_entry_point: {str(e)}")
-        print(f"❌ Error type: {type(e).__name__}")
-        import traceback
-
-        print(f"❌ Traceback: {traceback.format_exc()}")
-        raise e
 
 
 @router.post("/issue-blockchain-id", response_model=BlockchainIDResponse)
@@ -175,3 +59,184 @@ async def issue_blockchain_id(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to issue blockchain ID: {e}",
         )
+
+
+@router.get("/active-trips")
+async def fetch_active_trips(
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Fetch all active (ongoing) trips"""
+    try:
+        trips = await get_active_trips(db)
+        return {"active_trips": trips, "count": len(trips)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch active trips: {e}",
+        )
+
+
+@router.get("/latest-trip-locations")
+async def fetch_latest_trip_locations(
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Fetch the latest location for all ongoing trips"""
+    try:
+        trip_locations = await get_latest_location_all_trips(db)
+        return {"trip_locations": trip_locations, "count": len(trip_locations)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch latest trip locations: {e}",
+        )
+
+
+@router.get("/admin/stats", response_model=UserStatsResponse)
+async def get_user_statistics(
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get comprehensive user statistics (Admin only).
+
+    Returns statistical information about users including:
+    - Total user count
+    - Breakdown by role
+    - Verification statistics
+    - Active/inactive users
+    """
+    return await UserService.get_user_stats(db)
+
+
+@router.get("/unverified", response_model=UserListResponse)
+async def get_unverified_users(
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get list of unverified users (Admin only).
+
+    Convenience endpoint to quickly access users who need KYC verification.
+    """
+    users = await UserService.get_all_users(
+        db=db,
+        is_verified_filter=False,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Get total unverified count
+    all_unverified = await UserService.get_all_users(
+        db=db,
+        is_verified_filter=False,
+        limit=10000,
+        offset=0,
+    )
+
+    return UserListResponse(
+        users=users,
+        total_count=len(all_unverified),
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get("/users/list", response_model=UserListResponse)
+async def list_all_users(
+    role_filter: Optional[UserRoleEnum] = Query(
+        None, description="Filter by user role"
+    ),
+    is_active_filter: Optional[bool] = Query(
+        None, description="Filter by active status"
+    ),
+    is_verified_filter: Optional[bool] = Query(
+        None, description="Filter by verification status"
+    ),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    List all users with optional filtering (Admin only).
+
+    This endpoint allows administrators to view all users in the system with various filters:
+    - Filter by role (admin, tourist, guide, super_admin)
+    - Filter by active status
+    - Filter by verification status
+    - Pagination support
+    """
+    try:
+        users = await UserService.get_all_users(
+            db=db,
+            role_filter=role_filter,
+            is_active_filter=is_active_filter,
+            is_verified_filter=is_verified_filter,
+            limit=limit,
+            offset=offset,
+        )
+
+        # Get total count for pagination info
+        # Note: In production, you might want to optimize this with a separate count query
+        all_users = await UserService.get_all_users(
+            db=db,
+            role_filter=role_filter,
+            is_active_filter=is_active_filter,
+            is_verified_filter=is_verified_filter,
+            limit=10000,  # Large limit to get total count
+            offset=0,
+        )
+
+        return UserListResponse(
+            users=users,
+            total_count=len(all_users),
+            offset=offset,
+            limit=limit,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve users: {str(e)}",
+        )
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user_information(
+    user_id: int,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get detailed user information by ID (Admin only).
+
+    Returns complete user profile including:
+    - Personal information
+    - Contact details
+    - Verification status
+    - Role and permissions
+    - Blockchain information
+    """
+    return await UserService.get_user_by_id(db, user_id)
+
+
+@router.put("/users/{user_id}/status", response_model=UserResponse)
+async def update_user_status(
+    user_id: int,
+    status_update: UserStatusUpdateRequest,
+    admin_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update user active status (Admin only).
+
+    Allows administrators to activate or deactivate user accounts.
+    Deactivated users cannot log in or use the system.
+    """
+    return await UserService.update_user_status(
+        db, user_id, status_update.is_active, admin_user.id
+    )
