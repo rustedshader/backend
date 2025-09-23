@@ -279,9 +279,21 @@ async def search_offline_activities(
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Search offline activities with filtering and pagination."""
     try:
+        from sqlalchemy import or_
+
         statement = select(OfflineActivity)
 
-        # Apply filters
+        # Universal search across name, city, and state
+        if search_query.query:
+            universal_filter = or_(
+                OfflineActivity.name.ilike(f"%{search_query.query}%"),
+                OfflineActivity.city.ilike(f"%{search_query.query}%"),
+                OfflineActivity.state.ilike(f"%{search_query.query}%"),
+                OfflineActivity.district.ilike(f"%{search_query.query}%"),
+            )
+            statement = statement.where(universal_filter)
+
+        # Apply specific filters (these work in addition to universal search)
         if search_query.name:
             statement = statement.where(
                 OfflineActivity.name.ilike(f"%{search_query.name}%")

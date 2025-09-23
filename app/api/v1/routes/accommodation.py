@@ -89,18 +89,16 @@ async def get_accommodations(
         )
 
 
-@router.get("/search/name", response_model=AccommodationDataResponse)
-async def search_accommodations_by_name(
-    name: str = Query(..., description="Search term for accommodation name"),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+@router.post("/search/advanced", response_model=AccommodationDataResponse)
+async def search_accommodations_advanced(
+    search_query: AccommodationSearchQuery,
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Page size"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Search accommodations by name with pagination."""
+    """Search accommodations with comprehensive filtering options including city and state."""
     try:
-        search_query = AccommodationSearchQuery(name=name)
-
         accommodations, total_count = await accommodation_service.search_accommodations(
             search_query=search_query,
             db=db,
@@ -126,7 +124,7 @@ async def search_accommodations_by_name(
         )
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to search accommodations by name: {str(e)}"
+            status_code=500, detail=f"Failed to search accommodations: {str(e)}"
         )
 
 

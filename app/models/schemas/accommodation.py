@@ -34,6 +34,10 @@ class AccommodationResponse(AccommodationBase):
 
 
 class AccommodationSearchQuery(BaseModel):
+    query: Optional[str] = Field(
+        None,
+        description="Universal search query - searches across name, city, and state",
+    )
     name: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None

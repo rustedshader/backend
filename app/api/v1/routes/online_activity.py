@@ -96,18 +96,16 @@ async def search_online_activities_nearby(
         )
 
 
-@router.get("/search/name", response_model=OnlineActivityListResponse)
-async def search_online_activities_by_name(
-    name: str = Query(..., description="Search term for activity name"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+@router.post("/search", response_model=OnlineActivityListResponse)
+async def search_online_activities_endpoint(
+    search_query: OnlineActivitySearchQuery,
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Page size"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Search online activities by name with pagination."""
+    """Search online activities with comprehensive filtering options including city and state."""
     try:
-        search_query = OnlineActivitySearchQuery(name=name)
-
         (
             activities,
             total_count,
@@ -129,7 +127,7 @@ async def search_online_activities_by_name(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search online activities by name: {str(e)}",
+            detail=f"Failed to search online activities: {str(e)}",
         )
 
 

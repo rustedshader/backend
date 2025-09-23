@@ -215,14 +215,77 @@ async def search_accommodations(
     page_size: int = 20,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Search accommodations based on search criteria."""
-    return await get_accommodations(
-        db=db,
-        page=page,
-        page_size=page_size,
-        name=search_query.name,
-        city=search_query.city,
-        state=search_query.state,
-        latitude=search_query.latitude,
-        longitude=search_query.longitude,
-        radius_km=search_query.radius_km,
-    )
+    try:
+        from sqlalchemy import or_
+
+        statement = select(Accommodation)
+
+        # Universal search across name, city, and state
+        if search_query.query:
+            universal_filter = or_(
+                Accommodation.name.ilike(f"%{search_query.query}%"),
+                Accommodation.city.ilike(f"%{search_query.query}%"),
+                Accommodation.state.ilike(f"%{search_query.query}%"),
+            )
+            statement = statement.where(universal_filter)
+
+        # Apply specific filters (these work in addition to universal search)
+        if search_query.name:
+            statement = statement.where(
+                Accommodation.name.ilike(f"%{search_query.name}%")
+            )
+        if search_query.city:
+            statement = statement.where(
+                Accommodation.city.ilike(f"%{search_query.city}%")
+            )
+        if search_query.state:
+            statement = statement.where(
+                Accommodation.state.ilike(f"%{search_query.state}%")
+            )
+
+        # Execute query for counting and pagination
+        accommodations = db.exec(statement).all()
+
+        # Apply location-based filtering if coordinates provided
+        filtered_accommodations = []
+        if (
+            search_query.latitude is not None
+            and search_query.longitude is not None
+            and search_query.radius_km is not None
+        ):
+            for accommodation in accommodations:
+                try:
+                    if accommodation.location:
+                        point = to_shape(accommodation.location)
+                        distance = calculate_distance(
+                            search_query.latitude,
+                            search_query.longitude,
+                            point.y,
+                            point.x,
+                        )
+                        if distance <= search_query.radius_km:
+                            filtered_accommodations.append(accommodation)
+                except Exception:
+                    continue
+        else:
+            filtered_accommodations = accommodations
+
+        # Count total results
+        total_count = len(filtered_accommodations)
+
+        # Apply pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        paginated_accommodations = filtered_accommodations[start_index:end_index]
+
+        # Serialize accommodations
+        serialized_accommodations = []
+        for accommodation in paginated_accommodations:
+            serialized_accommodations.append(
+                _serialize_geometry_to_lat_lng(accommodation)
+            )
+
+        return serialized_accommodations, total_count
+
+    except Exception as e:
+        raise e
