@@ -21,6 +21,7 @@ from .geofencing import (
     RestrictedAreaTypeEnum,
 )
 from .accommodation import Accommodation
+from .alerts import Alert, AlertTypeEnum, AlertStatusEnum
 
 __all__ = [
     # User models
@@ -51,4 +52,8 @@ __all__ = [
     "RestrictedAreaStatusEnum",
     "RestrictedAreaTypeEnum",
     "Accommodation",
+    # Alert models
+    "Alert",
+    "AlertTypeEnum",
+    "AlertStatusEnum",
 ]
