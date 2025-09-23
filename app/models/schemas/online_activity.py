@@ -60,6 +60,7 @@ class OnlineActivityResponse(OnlineActivityBase):
 
 
 class OnlineActivitySearchQuery(BaseModel):
+    name: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     place_type: Optional[OnlineActivityTypeEnum] = None

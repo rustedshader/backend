@@ -96,18 +96,10 @@ async def get_trip_from_id(trip_id: int, db: Session = Depends(get_db)):
 async def receive_live_location(
     trip_id: int,
     location_data: LocationUpdate,
-    tracking_device: TrackingDevice = Depends(authenticate_tracking_device),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Receive live location data of the user in a trip."""
-    # Check if at least one of tracking_device or current_user is available
-    if not tracking_device and not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required: either tracking device or user must be present.",
-        )
-
     try:
         location_history = await save_location_data(
             trip_id,

@@ -34,6 +34,7 @@ class AccommodationResponse(AccommodationBase):
 
 
 class AccommodationSearchQuery(BaseModel):
+    name: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     latitude: Optional[float] = Field(None, ge=-90, le=90)

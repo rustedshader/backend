@@ -96,6 +96,43 @@ async def search_online_activities_nearby(
         )
 
 
+@router.get("/search/name", response_model=OnlineActivityListResponse)
+async def search_online_activities_by_name(
+    name: str = Query(..., description="Search term for activity name"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Search online activities by name with pagination."""
+    try:
+        search_query = OnlineActivitySearchQuery(name=name)
+
+        (
+            activities,
+            total_count,
+        ) = await online_activity_service.search_online_activities(
+            search_query=search_query, page=page, page_size=page_size, db=db
+        )
+
+        activity_responses = [
+            OnlineActivityResponse.model_validate(activity) for activity in activities
+        ]
+
+        return OnlineActivityListResponse(
+            online_activities=activity_responses,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search online activities by name: {str(e)}",
+        )
+
+
 @router.get("/{activity_id}", response_model=OnlineActivityResponse)
 async def get_online_activity(
     activity_id: int,

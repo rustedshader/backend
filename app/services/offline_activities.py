@@ -131,6 +131,22 @@ async def get_offline_activities_with_filters(
     return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
 
 
+async def search_offline_activities_by_name(
+    db: Session,
+    name: str,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Search offline activities by name."""
+    statement = select(OfflineActivity).where(OfflineActivity.name.ilike(f"%{name}%"))
+
+    # Apply limit if provided
+    if limit:
+        statement = statement.limit(limit)
+
+    activities = db.exec(statement).all()
+    return [_serialize_geometry_to_lat_lng(activity) for activity in activities]
+
+
 async def update_offline_activity(
     activity_id: int, activity_update_data: OfflineActivityUpdate, db: Session
 ) -> Dict[str, Any] | None:

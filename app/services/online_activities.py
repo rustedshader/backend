@@ -171,6 +171,11 @@ async def search_online_activities(
         statement = select(OnlineActivity).where(OnlineActivity.is_active)
 
         # Apply filters
+        if search_query.name:
+            statement = statement.where(
+                OnlineActivity.name.ilike(f"%{search_query.name}%")
+            )
+
         if search_query.city:
             statement = statement.where(
                 OnlineActivity.city.ilike(f"%{search_query.city}%")

@@ -148,6 +148,7 @@ async def get_accommodations(
     db: Session,
     page: int = 1,
     page_size: int = 20,
+    name: Optional[str] = None,
     city: Optional[str] = None,
     state: Optional[str] = None,
     latitude: Optional[float] = None,
@@ -159,6 +160,8 @@ async def get_accommodations(
         statement = select(Accommodation)
 
         # Apply filters
+        if name:
+            statement = statement.where(Accommodation.name.ilike(f"%{name}%"))
         if city:
             statement = statement.where(Accommodation.city.ilike(f"%{city}%"))
         if state:
@@ -216,6 +219,7 @@ async def search_accommodations(
         db=db,
         page=page,
         page_size=page_size,
+        name=search_query.name,
         city=search_query.city,
         state=search_query.state,
         latitude=search_query.latitude,

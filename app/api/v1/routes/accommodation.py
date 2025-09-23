@@ -38,6 +38,7 @@ async def create_accommodation(
 async def get_accommodations(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    name: Optional[str] = Query(None, description="Filter by name"),
     city: Optional[str] = Query(None, description="Filter by city"),
     state: Optional[str] = Query(None, description="Filter by state"),
     latitude: Optional[float] = Query(
@@ -58,6 +59,7 @@ async def get_accommodations(
             db=db,
             page=page,
             page_size=page_size,
+            name=name,
             city=city,
             state=state,
             latitude=latitude,
@@ -84,6 +86,47 @@ async def get_accommodations(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to fetch accommodations: {str(e)}"
+        )
+
+
+@router.get("/search/name", response_model=AccommodationDataResponse)
+async def search_accommodations_by_name(
+    name: str = Query(..., description="Search term for accommodation name"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Search accommodations by name with pagination."""
+    try:
+        search_query = AccommodationSearchQuery(name=name)
+
+        accommodations, total_count = await accommodation_service.search_accommodations(
+            search_query=search_query,
+            db=db,
+            page=page,
+            page_size=page_size,
+        )
+
+        accommodation_responses = [
+            AccommodationResponse(**accommodation) for accommodation in accommodations
+        ]
+
+        list_response = AccommodationListResponse(
+            accommodations=accommodation_responses,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+        )
+
+        return AccommodationDataResponse(
+            success=True,
+            data=list_response,
+            message="Accommodations found successfully",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to search accommodations by name: {str(e)}"
         )
 
 

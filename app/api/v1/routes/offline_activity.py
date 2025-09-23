@@ -13,6 +13,7 @@ from app.services.offline_activities import (
     update_offline_activity,
     update_offline_activity_route_data,
     _get_offline_activity_raw_by_id,
+    search_offline_activities_by_name,
 )
 from app.models.schemas.offline_activity import (
     OfflineActivityCreate,
@@ -53,6 +54,29 @@ async def get_offline_activities_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch offline activities",
+        ) from e
+
+
+@router.get("/search", response_model=List[OfflineActivityResponse])
+async def search_offline_activities_endpoint(
+    name: str = Query(..., description="Search term for activity name"),
+    limit: int = Query(default=100, le=1000, description="Maximum number of results"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Search offline activities by name."""
+    try:
+        offline_activities = await search_offline_activities_by_name(
+            db=db,
+            name=name,
+            limit=limit,
+        )
+        return offline_activities
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to search offline activities",
         ) from e
 
 
