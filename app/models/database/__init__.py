@@ -12,6 +12,7 @@ from .trips import (
     TripStatusEnum,
 )
 from .location_history import LocationHistory
+from .location_sharing import LocationSharing
 from .itinerary import Itinerary, ItineraryDay
 from .geofencing import (
     RestrictedAreas,

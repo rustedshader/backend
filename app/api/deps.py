@@ -27,9 +27,10 @@ async def get_current_user(
         payload = jwt.decode(
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
-        email: str = payload.get("sub")
+        email = payload.get("sub")
         if email is None:
             raise credentials_exception
+        email = email
     except JWTError:
         raise credentials_exception
 
@@ -130,13 +131,6 @@ async def authenticate_tracking_device(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "API-Key"},
-        )
-
-    # Check if device is active
-    if tracking_device.status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tracking device is not active",
         )
 
     return tracking_device

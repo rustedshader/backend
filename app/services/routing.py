@@ -4,13 +4,14 @@ GraphHopper routing service for calculating routes between points.
 
 import aiohttp
 from typing import List, Dict, Any, Optional, Tuple
+from app.core.config import settings
 
 
 class GraphHopperService:
     """Service to interact with self-hosted GraphHopper instance."""
 
     def __init__(self):
-        self.base_url = "https://maps.rustedshader.com"
+        self.base_url = settings.map_api_url
         self.default_profile = "car"  # car, foot, bike
 
     async def get_route(

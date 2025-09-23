@@ -23,7 +23,6 @@ async def save_location_data(
     trip_id: int,
     latitude: float,
     longitude: float,
-    tracking_device,
     db: Session,
 ) -> LocationHistory:
     """Save location data to location history."""

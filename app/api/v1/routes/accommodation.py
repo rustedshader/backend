@@ -13,7 +13,7 @@ from app.models.schemas.accommodation import (
 )
 from app.services import accommodation as accommodation_service
 
-router = APIRouter()
+router = APIRouter(prefix="/accommodations", tags=["accommodations"])
 
 
 @router.post("/", response_model=AccommodationResponse)

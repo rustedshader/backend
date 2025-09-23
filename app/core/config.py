@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = os.environ.get("JWT_SECRET_KEY", "your_secret_key")
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
 
+    map_api_url: str = os.environ.get("MAP_API_URL", "https://maps.surakshit.world")
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

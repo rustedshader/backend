@@ -30,9 +30,7 @@ app.include_router(router=itinerary_router)
 app.include_router(router=trips_router)
 app.include_router(router=trek_router)
 app.include_router(router=places_router)
-app.include_router(
-    router=accommodation_router, prefix="/accommodations", tags=["accommodations"]
-)
+app.include_router(router=accommodation_router)
 app.include_router(router=tracking_device_router)
 app.include_router(router=tourist_id_router)
 app.include_router(router=admin_router)
