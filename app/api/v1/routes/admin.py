@@ -31,19 +31,43 @@ from app.services.users import UserService
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-@router.post("/issue-blockchain-id", response_model=BlockchainIDResponse)
+@router.post(
+    "/issue-blockchain-id", response_model=BlockchainIDResponse, deprecated=True
+)
 async def issue_blockchain_id(
     request: BlockchainIDRequest,
     admin_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """
-    Issue blockchain ID to a tourist at entry point.
+    **⚠️ DEPRECATED:** Issue blockchain ID to a tourist at entry point.
+
+    **Please use the new blockchain ID system instead:**
+    - Apply: `POST /blockchain-id/apply`
+    - Issue: `POST /blockchain-id/applications/{application_id}/issue`
+
+    **This endpoint will be removed in a future version.**
+
+    ---
+
+    Legacy functionality:
     This should only be called after physical verification of documents.
     Only authorized officials can call this endpoint.
     Automatically sets KYC verified to true when blockchain ID is issued.
     """
     try:
+        # Add deprecation warning to logs
+        import warnings
+
+        warnings.warn(
+            "The /admin/issue-blockchain-id endpoint is deprecated. "
+            "Please use the new blockchain ID system: "
+            "POST /blockchain-id/apply and "
+            "POST /blockchain-id/applications/{application_id}/issue",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         result = await issue_blockchain_id_at_entry_point(
             user_id=request.user_id,
             itinerary_id=request.itinerary_id,

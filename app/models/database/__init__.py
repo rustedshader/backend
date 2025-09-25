@@ -22,6 +22,11 @@ from .geofencing import (
 )
 from .accommodation import Accommodation
 from .alerts import Alert, AlertTypeEnum, AlertStatusEnum
+from .blockchain_id import (
+    BlockchainApplication,
+    BlockchainID,
+    BlockchainApplicationStatusEnum,
+)
 
 __all__ = [
     # User models
@@ -56,4 +61,8 @@ __all__ = [
     "Alert",
     "AlertTypeEnum",
     "AlertStatusEnum",
+    # Blockchain ID models
+    "BlockchainApplication",
+    "BlockchainID",
+    "BlockchainApplicationStatusEnum",
 ]

@@ -16,11 +16,26 @@ async def issue_blockchain_id_at_entry_point(
     user_id: int, itinerary_id: int, validity_days: int, official_id: int, db: Session
 ) -> dict:
     """
-    Issue blockchain ID to a tourist at an entry point by an authorized official.
+    ⚠️ DEPRECATED: Issue blockchain ID to a tourist at an entry point by an authorized official.
+
+    This function is deprecated. Please use the new blockchain ID application system:
+    1. Create application: app.services.blockchain_id.apply_for_blockchain_id()
+    2. Issue ID: app.services.blockchain_id.issue_blockchain_id()
+
     This should only be called after physical verification of documents.
     Automatically sets KYC verified to true when blockchain ID is issued.
     """
     try:
+        # Add deprecation warning
+        import warnings
+
+        warnings.warn(
+            "issue_blockchain_id_at_entry_point is deprecated. "
+            "Use the new blockchain ID application system instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         from app.services import itinerary as itinerary_service
 
         # Get the user

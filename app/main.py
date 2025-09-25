@@ -13,6 +13,7 @@ from app.api.v1.routes.routing import router as routing_router
 from app.api.v1.routes.geofencing import router as geofencing_router
 from app.api.v1.routes.accommodation import router as accommodation_router
 from app.api.v1.routes.alerts import router as alerts_router
+from app.api.v1.routes.blockchain_id import router as blockchain_id_router
 from app.models.database.base import create_db_and_tables
 
 
@@ -36,4 +37,7 @@ app.include_router(router=tourist_id_router)
 app.include_router(router=routing_router)
 app.include_router(router=geofencing_router)
 app.include_router(router=alerts_router)
+app.include_router(
+    router=blockchain_id_router, prefix="/blockchain-id", tags=["Blockchain ID"]
+)
 app.include_router(router=admin_router)
