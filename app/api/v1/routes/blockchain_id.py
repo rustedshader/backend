@@ -296,6 +296,7 @@ async def get_my_blockchain_application(
             "status": application.status,
             "applied_at": application.applied_at,
             "admin_notes": application.admin_notes,
+            "user_blockchain_address": current_user.blockchain_address,  # User's blockchain wallet address
         }
 
         # If issued, get blockchain ID details
@@ -310,12 +311,53 @@ async def get_my_blockchain_application(
                 response_data.update(
                     {
                         "blockchain_id": blockchain_id.blockchain_id,
+                        "blockchain_hash": blockchain_id.blockchain_hash,
+                        "transaction_hash": blockchain_id.transaction_hash,
+                        "smart_contract_address": blockchain_id.smart_contract_address,
                         "issued_date": blockchain_id.issued_date,
                         "expiry_date": blockchain_id.expiry_date,
                         "is_active": blockchain_id.is_active,
                         "qr_code_data": blockchain_id.qr_code_data,
                     }
                 )
+
+                # Also get trip and location sharing info
+                from app.models.database.trips import Trips
+                from app.models.database.location_sharing import LocationSharing
+
+                trip = db.exec(
+                    select(Trips)
+                    .where(
+                        Trips.user_id == current_user.id,
+                        Trips.itinerary_id == application.itinerary_id,
+                    )
+                    .order_by(Trips.id.desc())
+                ).first()
+
+                if trip:
+                    response_data.update(
+                        {
+                            "trip_id": trip.id,
+                            "trip_status": trip.status,
+                            "tourist_id_token": trip.tourist_id,
+                        }
+                    )
+
+                    # Get location sharing info
+                    location_sharing = db.exec(
+                        select(LocationSharing).where(
+                            LocationSharing.trip_id == trip.id
+                        )
+                    ).first()
+
+                    if location_sharing:
+                        response_data.update(
+                            {
+                                "location_share_code": location_sharing.share_code,
+                                "location_sharing_expires_at": location_sharing.expires_at,
+                                "location_sharing_active": location_sharing.is_active,
+                            }
+                        )
 
         status_messages = {
             "pending": "Your application is being reviewed by the admin.",
@@ -335,4 +377,125 @@ async def get_my_blockchain_application(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve application status: {e}",
+        )
+
+
+@router.get("/my-blockchain-details", response_model=APIResponse)
+async def get_my_blockchain_details(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Tourist gets their complete blockchain ID details including transaction hash.
+
+    Returns all blockchain-related information:
+    - Real blockchain ID (token ID)
+    - Transaction hash from blockchain
+    - Smart contract address
+    - Blockchain wallet address
+    - Trip and location sharing info
+    - QR code data
+    """
+    try:
+        from sqlmodel import select
+        from app.models.database.blockchain_id import (
+            BlockchainApplication,
+            BlockchainID,
+        )
+        from app.models.database.trips import Trips
+        from app.models.database.location_sharing import LocationSharing
+
+        # Get user's issued blockchain ID
+        application = db.exec(
+            select(BlockchainApplication).where(
+                BlockchainApplication.user_id == current_user.id,
+                BlockchainApplication.status == BlockchainApplicationStatusEnum.ISSUED,
+            )
+        ).first()
+
+        if not application:
+            return APIResponse(
+                success=False,
+                message="No blockchain ID issued yet. Please apply and wait for admin approval.",
+                data={"has_blockchain_id": False},
+            )
+
+        blockchain_id = db.exec(
+            select(BlockchainID).where(BlockchainID.application_id == application.id)
+        ).first()
+
+        if not blockchain_id:
+            return APIResponse(
+                success=False,
+                message="Blockchain ID record not found.",
+                data={"has_blockchain_id": False},
+            )
+
+        # Get trip info
+        trip = db.exec(
+            select(Trips)
+            .where(
+                Trips.user_id == current_user.id,
+                Trips.itinerary_id == application.itinerary_id,
+            )
+            .order_by(Trips.id.desc())
+        ).first()
+
+        # Get location sharing
+        location_sharing = None
+        if trip:
+            location_sharing = db.exec(
+                select(LocationSharing).where(LocationSharing.trip_id == trip.id)
+            ).first()
+
+        blockchain_details = {
+            "has_blockchain_id": True,
+            # Application Info
+            "application_number": application.application_number,
+            "applied_at": application.applied_at,
+            "issued_at": application.issued_at,
+            # Real Blockchain Data
+            "blockchain_id": blockchain_id.blockchain_id,  # Real token ID
+            "transaction_hash": blockchain_id.transaction_hash,  # Real blockchain transaction
+            "blockchain_hash": blockchain_id.blockchain_hash,
+            "smart_contract_address": blockchain_id.smart_contract_address,
+            "user_blockchain_address": current_user.blockchain_address,  # User's wallet
+            # Validity
+            "issued_date": blockchain_id.issued_date,
+            "expiry_date": blockchain_id.expiry_date,
+            "is_active": blockchain_id.is_active,
+            "days_remaining": (
+                blockchain_id.expiry_date - blockchain_id.issued_date
+            ).days
+            if blockchain_id.is_active
+            else 0,
+            # QR Code for showing ID
+            "qr_code_data": blockchain_id.qr_code_data,
+            # Trip Info
+            "trip_id": trip.id if trip else None,
+            "trip_status": trip.status if trip else None,
+            "tourist_id_token": trip.tourist_id if trip else None,
+            "trip_blockchain_hash": trip.blockchain_transaction_hash if trip else None,
+            # Location Sharing
+            "location_share_code": location_sharing.share_code
+            if location_sharing
+            else None,
+            "location_sharing_active": location_sharing.is_active
+            if location_sharing
+            else False,
+            "location_sharing_expires_at": location_sharing.expires_at
+            if location_sharing
+            else None,
+        }
+
+        return APIResponse(
+            success=True,
+            message="Your blockchain Tourist ID details",
+            data=blockchain_details,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve blockchain details: {e}",
         )

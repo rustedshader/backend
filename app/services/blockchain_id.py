@@ -1,8 +1,10 @@
 import json
-from datetime import datetime, timedelta
+import datetime
+from datetime import timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from sqlmodel import Session, select, or_
 from sqlalchemy import func
+from web3 import Web3
 
 from app.models.database.blockchain_id import (
     BlockchainApplication,
@@ -15,6 +17,10 @@ from app.models.schemas.blockchain_id import (
     ApplicationSearchQuery,
     BlockchainStatistics,
 )
+from app.models.database.user import User
+from app.models.database.trips import Trips, TripStatusEnum
+from app.models.database.location_sharing import LocationSharing
+from app.utils.blockchain import TouristIDClient
 
 
 # Tourist applies for blockchain ID
@@ -47,7 +53,7 @@ async def apply_for_blockchain_id(
         #     raise ValueError("Itinerary not found or doesn't belong to you")
 
         # Generate application number
-        app_number = f"BID{datetime.utcnow().strftime('%Y%m%d')}{user_id:06d}"
+        app_number = f"BID{datetime.datetime.utcnow().strftime('%Y%m%d')}{user_id:06d}"
 
         # Create application
         application = BlockchainApplication(
@@ -55,7 +61,7 @@ async def apply_for_blockchain_id(
             user_id=user_id,
             itinerary_id=application_data.itinerary_id,
             status=BlockchainApplicationStatusEnum.PENDING,
-            applied_at=datetime.utcnow(),
+            applied_at=datetime.datetime.utcnow(),
         )
 
         db.add(application)
@@ -206,7 +212,7 @@ async def reject_application(
 
         # Update application
         application.status = BlockchainApplicationStatusEnum.REJECTED
-        application.rejected_at = datetime.utcnow()
+        application.rejected_at = datetime.datetime.utcnow()
         application.processed_by_admin = admin_id
         application.admin_notes = admin_notes
 
@@ -231,7 +237,7 @@ async def reject_application(
 async def issue_blockchain_id(
     issue_request: BlockchainIDIssueRequest, admin_id: int, db: Session
 ) -> Dict[str, Any]:
-    """Admin directly issues blockchain ID from pending application"""
+    """Admin directly issues REAL blockchain ID from pending application with actual blockchain transaction"""
     try:
         # Get application
         application = db.exec(
@@ -256,54 +262,173 @@ async def issue_blockchain_id(
         if existing_id:
             raise ValueError("Blockchain ID already issued for this application")
 
-        # Generate blockchain ID
-        blockchain_id_value = (
-            f"BTID{datetime.utcnow().strftime('%Y%m%d')}{application.id:08d}"
+        # Get user details
+        user = db.exec(select(User).where(User.id == application.user_id)).first()
+        if not user:
+            raise ValueError("User not found")
+
+        # Get itinerary data for blockchain
+        from app.services import itinerary as itinerary_service
+
+        itinerary_data = await itinerary_service.get_itinerary_for_blockchain(
+            itinerary_id=application.itinerary_id, db=db
         )
-        blockchain_hash = _generate_blockchain_hash(application)
+
+        if not itinerary_data or itinerary_data.strip() == "":
+            raise ValueError(
+                f"Invalid itinerary data for itinerary_id {application.itinerary_id}"
+            )
+
+        # Create blockchain account for the user
+        web3 = Web3()
+        userblockchain_account = web3.eth.account.create()
+        userblockchain_account_address = userblockchain_account.address
+
+        # Validate blockchain address
+        if not userblockchain_account_address or not web3.is_address(
+            userblockchain_account_address
+        ):
+            raise ValueError("Failed to generate valid blockchain address")
+
+        # Initialize blockchain client and issue tourist ID
+        from app.core.config import settings
+
+        if (
+            not settings.owner_address
+            or not settings.private_key
+            or not settings.contract_address
+        ):
+            raise ValueError(
+                "Blockchain configuration missing. Please set OWNER_ADDRESS, PRIVATE_KEY, and CONTRACT_ADDRESS environment variables."
+            )
+
+        blockchain_client = TouristIDClient()
+
+        # Create KYC hash from user data - handle None values
+        kyc_data = {
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "email": user.email or "",
+            "country_code": user.country_code or "",
+            "aadhar_hash": user.aadhar_number_hash or "",
+            "passport_hash": user.passport_number_hash or "",
+            "verified_by_official": admin_id,
+        }
+        kyc_json = json.dumps(kyc_data, sort_keys=True)
+        if not kyc_json or kyc_json.strip() == "":
+            raise ValueError("Invalid KYC data - cannot generate hash")
+
+        kyc_hash = blockchain_client.bytes32_from_text(kyc_json)
+        if not kyc_hash:
+            raise ValueError("Failed to generate KYC hash")
+
+        # Create itinerary hash
+        itinerary_hash = blockchain_client.bytes32_from_text(itinerary_data)
+        if not itinerary_hash:
+            raise ValueError("Failed to generate itinerary hash")
+
+        # Issue tourist ID with specified validity
+        validity_seconds = issue_request.validity_days * 24 * 3600
+
+        # REAL BLOCKCHAIN TRANSACTION
+        token_id, receipt = blockchain_client.issue_id(
+            tourist=userblockchain_account_address,
+            kyc_hash_hex32=kyc_hash,
+            itinerary_hash_hex32=itinerary_hash,
+            validity_seconds=validity_seconds,
+        )
 
         # Calculate expiry date
-        expiry_date = datetime.utcnow() + timedelta(days=issue_request.validity_days)
-
-        # Generate QR code data for the blockchain ID
-        id_qr_data = {
-            "blockchain_id": blockchain_id_value,
-            "user_id": application.user_id,
-            "issued_date": datetime.utcnow().isoformat(),
-            "expiry_date": expiry_date.isoformat(),
-        }
-
-        # Create blockchain ID record
-        blockchain_id = BlockchainID(
-            blockchain_id=blockchain_id_value,
-            application_id=application.id,
-            user_id=application.user_id,
-            blockchain_hash=blockchain_hash,
-            issued_date=datetime.utcnow(),
-            expiry_date=expiry_date,
-            qr_code_data=json.dumps(id_qr_data),
+        expiry_date = datetime.datetime.utcnow() + timedelta(
+            days=issue_request.validity_days
         )
 
-        db.add(blockchain_id)
+        # Create blockchain ID record with REAL blockchain data
+        blockchain_id = BlockchainID(
+            blockchain_id=str(token_id)
+            if token_id != -1
+            else f"BTID{datetime.datetime.utcnow().strftime('%Y%m%d')}{application.id:08d}",
+            application_id=application.id,
+            user_id=application.user_id,
+            blockchain_hash=receipt["transactionHash"].hex(),
+            smart_contract_address=settings.contract_address,
+            transaction_hash=receipt["transactionHash"].hex(),
+            issued_date=datetime.datetime.utcnow(),
+            expiry_date=expiry_date,
+            qr_code_data=json.dumps(
+                {
+                    "blockchain_id": str(token_id),
+                    "user_id": application.user_id,
+                    "blockchain_address": userblockchain_account_address,
+                    "transaction_hash": receipt["transactionHash"].hex(),
+                    "issued_date": datetime.datetime.utcnow().isoformat(),
+                    "expiry_date": expiry_date.isoformat(),
+                }
+            ),
+        )
+
+        # Update user with blockchain information and automatically verify KYC
+        user.blockchain_address = userblockchain_account_address
+        user.is_kyc_verified = (
+            True  # Automatically verify KYC when blockchain ID is issued
+        )
+
+        # Create a new trip for this tourist ID
+        new_trip = Trips(
+            user_id=application.user_id,
+            itinerary_id=application.itinerary_id,
+            status=TripStatusEnum.ONGOING,  # Auto-start the trip when blockchain ID is issued
+            tourist_id=str(token_id) if token_id != -1 else None,
+            blockchain_transaction_hash=receipt["transactionHash"].hex(),
+        )
+
+        # Create location sharing code for the new trip
+        location_sharing = LocationSharing(
+            trip_id=new_trip.id,  # Will be set after commit
+            user_id=application.user_id,
+            share_code=LocationSharing.generate_share_code(),
+            is_active=True,
+            expires_at=datetime.datetime.now(datetime.timezone.utc)
+            + datetime.timedelta(days=issue_request.validity_days),
+        )
 
         # Update application status directly to ISSUED
         application.status = BlockchainApplicationStatusEnum.ISSUED
-        application.issued_at = datetime.utcnow()
+        application.issued_at = datetime.datetime.utcnow()
         application.processed_by_admin = admin_id
         application.admin_notes = issue_request.admin_notes
-        db.add(application)
 
+        # Save all changes
+        db.add(blockchain_id)
+        db.add(user)
+        db.add(new_trip)
+        db.add(application)
         db.commit()
         db.refresh(blockchain_id)
-        db.refresh(application)
+        db.refresh(new_trip)
+
+        # Update location sharing with trip_id
+        location_sharing.trip_id = new_trip.id
+        db.add(location_sharing)
+        db.commit()
+        db.refresh(location_sharing)
 
         return {
-            "blockchain_id": blockchain_id_value,
+            "success": True,
+            "message": "REAL Blockchain Tourist ID issued successfully with blockchain transaction!",
+            "blockchain_id": str(token_id)
+            if token_id != -1
+            else blockchain_id.blockchain_id,
             "application_id": application.id,
+            "tourist_id_token": token_id,
+            "trip_id": new_trip.id,
+            "blockchain_address": userblockchain_account_address,
+            "transaction_hash": receipt["transactionHash"].hex(),
+            "contract_address": settings.contract_address,
             "issued_date": blockchain_id.issued_date,
             "expiry_date": blockchain_id.expiry_date,
             "qr_code_data": blockchain_id.qr_code_data,
-            "message": "Blockchain Tourist ID issued successfully!",
+            "share_code": location_sharing.share_code,
         }
 
     except Exception as e:
@@ -325,7 +450,7 @@ def _generate_blockchain_hash(application: BlockchainApplication) -> str:
 async def get_blockchain_statistics(db: Session) -> BlockchainStatistics:
     """Get statistics for admin dashboard"""
     try:
-        today = datetime.utcnow().date()
+        today = datetime.datetime.utcnow().date()
 
         total_applications = db.exec(select(func.count(BlockchainApplication.id))).one()
         pending_applications = db.exec(
