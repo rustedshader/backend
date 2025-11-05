@@ -2,29 +2,23 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import (
     get_current_user,
-    authenticate_tracking_device,
+    verify_location_api_key,
 )
 from app.models.database.base import get_db
-from app.models.database.tracking_device import TrackingDevice
 from app.models.schemas.trips import (
     LocationUpdate,
-    TripCreate,
-    TripCreateResponse,
     TripWithShareCodeResponse,
 )
 from app.models.schemas.location_sharing import (
     LocationSharingCreate,
     LocationSharingResponse,
     SharedLocationResponse,
-    ShareCodeValidation,
 )
 from app.models.database.user import User
 from sqlmodel import Session
 from app.services.trips import (
-    get_user_trips,
     get_trip_by_id,
     save_location_data,
-    create_trip_with_location_sharing,
     get_user_trips_with_share_codes,
 )
 from app.services.location_sharing import (
@@ -33,7 +27,6 @@ from app.services.location_sharing import (
     update_location_sharing,
     get_user_location_shares,
 )
-from typing import Sequence
 from app.models.database.trips import Trips
 
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -96,10 +89,26 @@ async def get_trip_from_id(trip_id: int, db: Session = Depends(get_db)):
 async def receive_live_location(
     trip_id: int,
     location_data: LocationUpdate,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    api_key_valid: bool = Depends(verify_location_api_key),
 ):
-    """Receive live location data of the user in a trip."""
+    """
+    Receive live location data of the user in a trip.
+
+    Authentication: Requires both user authentication AND a valid location API key.
+
+    Headers required:
+    - Authorization: Bearer <token>
+    - X-Location-API-Key: <location_api_key>
+
+    Valid API keys are hardcoded for now:
+    - loc_api_key_001_tracking_device_alpha
+    - loc_api_key_002_tracking_device_beta
+    - loc_api_key_003_mobile_app_integration
+    - loc_api_key_004_iot_sensor_network
+    - loc_api_key_005_emergency_services
+    """
     try:
         location_history = await save_location_data(
             trip_id,

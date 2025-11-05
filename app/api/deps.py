@@ -8,6 +8,17 @@ from app.models.database.user import User
 from app.models.database.tracking_device import TrackingDevice
 
 
+# Hardcoded API keys for live location tracking
+# TODO: Move these to environment variables or database in production
+VALID_LOCATION_API_KEYS = {
+    "loc_api_key_001_tracking_device_alpha",
+    "loc_api_key_002_tracking_device_beta",
+    "loc_api_key_003_mobile_app_integration",
+    "loc_api_key_004_iot_sensor_network",
+    "loc_api_key_005_emergency_services",
+}
+
+
 oauth2_schema = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
@@ -134,3 +145,35 @@ async def authenticate_tracking_device(
         )
 
     return tracking_device
+
+
+async def verify_location_api_key(
+    x_location_api_key: str = Header(None, alias="X-Location-API-Key"),
+) -> bool:
+    """
+    Dependency to verify hardcoded location API keys for live location tracking.
+
+    Args:
+        x_location_api_key: API key from the X-Location-API-Key header
+
+    Returns:
+        bool: True if API key is valid
+
+    Raises:
+        HTTPException: If API key is invalid or missing
+    """
+    if not x_location_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Location API key is required",
+            headers={"WWW-Authenticate": "Location-API-Key"},
+        )
+
+    if x_location_api_key not in VALID_LOCATION_API_KEYS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid location API key",
+            headers={"WWW-Authenticate": "Location-API-Key"},
+        )
+
+    return True
