@@ -34,7 +34,6 @@ class ItineraryCreate(BaseModel):
     start_date: datetime.date
     end_date: datetime.date
     total_duration_days: int = Field(..., gt=0, le=365)
-    itinerary_days: Optional[List[ItineraryDayCreate]] = []
 
 
 class ItineraryUpdate(BaseModel):
