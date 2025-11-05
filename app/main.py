@@ -23,7 +23,9 @@ async def lifespan(app: fastapi.FastAPI):
     yield
 
 
-app = fastapi.FastAPI(title="SIH Backend API", version="1.0.0", lifespan=lifespan)
+app = fastapi.FastAPI(
+    title="Tourist App Backend Api", version="1.0.0", lifespan=lifespan
+)
 
 app.include_router(router=auth_router)
 app.include_router(router=guide_router)

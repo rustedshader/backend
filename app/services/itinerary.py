@@ -181,14 +181,58 @@ async def update_itinerary(
 
 
 async def delete_itinerary(itinerary_id: int, user_id: int, db: Session) -> bool:
-    """Delete an itinerary and all its associated days"""
+    """Delete an itinerary and all its associated data (days, trips, blockchain applications)"""
     try:
+        from app.models.database.trips import Trips
+        from app.models.database.blockchain_id import (
+            BlockchainApplication,
+            BlockchainID,
+        )
+        from fastapi import HTTPException, status
+
         # Get the itinerary to ensure it exists and belongs to the user
         itinerary = await get_itinerary_by_id(itinerary_id, user_id, db)
         if not itinerary:
             return False
 
-        # Delete all associated itinerary days first
+        # Check if there are any active trips using this itinerary
+        active_trips_statement = select(Trips).where(
+            Trips.itinerary_id == itinerary_id,
+            Trips.status.in_(["ongoing", "upcoming"]),
+        )
+        active_trips = db.exec(active_trips_statement).all()
+
+        if active_trips:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot delete itinerary. There are {len(active_trips)} active or upcoming trips using this itinerary. Please complete or cancel those trips first.",
+            )
+
+        # Delete blockchain IDs associated with blockchain applications for this itinerary
+        blockchain_apps_statement = select(BlockchainApplication).where(
+            BlockchainApplication.itinerary_id == itinerary_id
+        )
+        blockchain_apps = db.exec(blockchain_apps_statement).all()
+
+        for app in blockchain_apps:
+            # Delete associated blockchain IDs first
+            blockchain_ids_statement = select(BlockchainID).where(
+                BlockchainID.application_id == app.id
+            )
+            blockchain_ids = db.exec(blockchain_ids_statement).all()
+            for blockchain_id in blockchain_ids:
+                db.delete(blockchain_id)
+
+            # Delete the blockchain application
+            db.delete(app)
+
+        # Delete all trips (completed or cancelled) associated with this itinerary
+        trips_statement = select(Trips).where(Trips.itinerary_id == itinerary_id)
+        trips = db.exec(trips_statement).all()
+        for trip in trips:
+            db.delete(trip)
+
+        # Delete all associated itinerary days
         days_statement = select(ItineraryDay).where(
             ItineraryDay.itinerary_id == itinerary_id
         )
@@ -196,15 +240,21 @@ async def delete_itinerary(itinerary_id: int, user_id: int, db: Session) -> bool
         for day in days:
             db.delete(day)
 
-        # Delete the itinerary
+        # Finally, delete the itinerary itself
         db.delete(itinerary)
         db.commit()
 
         return True
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
-        print(e)
+        print(f"Error deleting itinerary: {e}")
+        import traceback
+
+        traceback.print_exc()
         raise e
 
 

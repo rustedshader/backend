@@ -173,6 +173,9 @@ async def delete_itinerary(
 ):
     """
     Delete an itinerary (must belong to current user).
+
+    Note: Cannot delete itineraries that have active (ongoing/upcoming) trips.
+    Complete or cancel those trips first.
     """
     try:
         success = await itinerary_service.delete_itinerary(
@@ -186,10 +189,14 @@ async def delete_itinerary(
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        import traceback
+
+        print(f"Error deleting itinerary: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete itinerary",
+            detail=f"Failed to delete itinerary: {str(e)}",
         )
 
 
