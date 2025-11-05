@@ -31,22 +31,13 @@ async def create_itinerary(
         db.commit()
         db.refresh(new_itinerary)
 
-        # Create itinerary days if provided
-        for day in itinerary_data.itinerary_days or []:
-            new_day = ItineraryDay(
-                itinerary_id=new_itinerary.id,
-                accommodation_id=day.accommodation_id,
-                day_number=day.day_number,
-                offline_activity_id=day.offline_activity_id,
-                online_activity_id=day.online_activity_id,
-            )
-            db.add(new_day)
-        db.commit()
-
         return new_itinerary
     except Exception as e:
         db.rollback()
-        print(e)
+        print(f"Error in create_itinerary: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
         raise e
 
 

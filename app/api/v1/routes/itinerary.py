@@ -61,10 +61,14 @@ async def create_itinerary(
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        import traceback
+
+        print(f"Error creating itinerary: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create itinerary",
+            detail=f"Failed to create itinerary: {str(e)}",
         )
 
 
