@@ -2,7 +2,37 @@
 
 ## Overview
 
-The `/trips/{trip_id}/live-location` endpoint now requires both user authentication (JWT token) AND a valid location API key for enhanced security.
+# Location API Keys Documentation
+
+## Overview
+
+The `/trips/{trip_id}/live-location` endpoint now supports flexible authentication - you can use **EITHER** a JWT token **OR** a location API key. This allows both authenticated users and external systems (like IoT devices) to post location data.
+
+## Authentication Methods
+
+### Option 1: JWT Token (User Authentication)
+
+Use this for mobile apps and web applications where users are logged in.
+
+**Header:**
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+### Option 2: Location API Key (System Authentication)
+
+Use this for tracking devices, IoT sensors, or external systems that don't have user context.
+
+**Header:**
+
+```
+X-Location-API-Key: <one_of_the_valid_api_keys>
+```
+
+### Option 3: Both (Optional)
+
+You can provide both headers, and the system will use JWT authentication if valid, falling back to API key if needed.
 
 ## Valid API Keys (Hardcoded)
 

@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.models.database.base import get_db
 from app.models.database.user import User
 from app.models.database.tracking_device import TrackingDevice
+from typing import Optional
 
 
 # Hardcoded API keys for live location tracking
@@ -177,3 +178,104 @@ async def verify_location_api_key(
         )
 
     return True
+
+
+async def get_optional_user(
+    token: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """
+    Dependency to optionally get the current authenticated user from JWT token.
+    Returns None if no token is provided or token is invalid.
+    """
+    if not token:
+        return None
+
+    # Remove 'Bearer ' prefix if present
+    if token.startswith("Bearer "):
+        token = token[7:]
+    else:
+        return None
+
+    try:
+        payload = jwt.decode(
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+        )
+        email = payload.get("sub")
+        if email is None:
+            return None
+    except JWTError:
+        return None
+
+    statement = select(User).where(User.email == email)
+    user = db.exec(statement).first()
+
+    if user is None or not user.is_active:
+        return None
+
+    return user
+
+
+async def authenticate_with_jwt_or_api_key(
+    x_location_api_key: str = Header(None, alias="X-Location-API-Key"),
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Dependency to authenticate using either JWT token OR location API key.
+    At least one must be provided and valid.
+
+    Args:
+        x_location_api_key: API key from the X-Location-API-Key header (optional)
+        authorization: JWT token from Authorization header (optional)
+        db: Database session
+
+    Returns:
+        dict: Dictionary with authentication info:
+            - 'auth_type': 'jwt' or 'api_key'
+            - 'user': User object (if JWT) or None
+            - 'api_key': API key string (if API key) or None
+
+    Raises:
+        HTTPException: If neither authentication method is provided or both are invalid
+    """
+    authenticated = False
+    auth_info = {"auth_type": None, "user": None, "api_key": None}
+
+    # Try JWT authentication first
+    if authorization:
+        token = authorization
+        if token.startswith("Bearer "):
+            token = token[7:]
+
+        try:
+            payload = jwt.decode(
+                token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+            )
+            email = payload.get("sub")
+            if email:
+                statement = select(User).where(User.email == email)
+                user = db.exec(statement).first()
+                if user and user.is_active:
+                    authenticated = True
+                    auth_info["auth_type"] = "jwt"
+                    auth_info["user"] = user
+        except JWTError:
+            pass  # Try API key next
+
+    # If JWT failed or wasn't provided, try API key
+    if not authenticated and x_location_api_key:
+        if x_location_api_key in VALID_LOCATION_API_KEYS:
+            authenticated = True
+            auth_info["auth_type"] = "api_key"
+            auth_info["api_key"] = x_location_api_key
+
+    # If neither worked, raise error
+    if not authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Provide either a valid JWT token (Authorization: Bearer <token>) or a valid location API key (X-Location-API-Key: <key>)",
+            headers={"WWW-Authenticate": "Bearer, Location-API-Key"},
+        )
+
+    return auth_info

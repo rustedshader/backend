@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.api.deps import (
     get_current_user,
-    verify_location_api_key,
+    authenticate_with_jwt_or_api_key,
 )
 from app.models.database.base import get_db
 from app.models.schemas.trips import (
@@ -90,17 +90,18 @@ async def receive_live_location(
     trip_id: int,
     location_data: LocationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    api_key_valid: bool = Depends(verify_location_api_key),
+    auth_info: dict = Depends(authenticate_with_jwt_or_api_key),
 ):
     """
     Receive live location data of the user in a trip.
 
-    Authentication: Requires both user authentication AND a valid location API key.
+    Authentication: Requires EITHER a valid JWT token OR a valid location API key.
 
-    Headers required:
-    - Authorization: Bearer <token>
-    - X-Location-API-Key: <location_api_key>
+    Option 1 - JWT Token:
+    - Header: Authorization: Bearer <token>
+
+    Option 2 - Location API Key:
+    - Header: X-Location-API-Key: <location_api_key>
 
     Valid API keys are hardcoded for now:
     - loc_api_key_001_tracking_device_alpha
@@ -117,12 +118,20 @@ async def receive_live_location(
             db,
         )
 
-        return {
+        # Include auth type in response for debugging/logging
+        response = {
             "status": "success",
             "message": "Location data received",
             "location_id": location_history.id,
             "timestamp": location_history.timestamp,
+            "authenticated_via": auth_info["auth_type"],
         }
+
+        # Add user info if authenticated via JWT
+        if auth_info["auth_type"] == "jwt" and auth_info["user"]:
+            response["user_id"] = auth_info["user"].id
+
+        return response
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
